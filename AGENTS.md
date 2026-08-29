@@ -14,13 +14,38 @@ code, and it must never be able to.
 1. `SPEC.md` — the product definition. It wins over everything below.
 2. `LOOP.md` — how to work here autonomously: decide, implement, verify,
    iterate; do not stop to ask about reversible technical choices.
-3. `PROGRESS.md` — what is done, what is deliberately not, and known gaps.
-4. `DECISIONS.md` — why the code is shaped as it is. Read before proposing an
+3. `DECISIONS.md` — why the code is shaped as it is. Read before proposing an
    architecture change; the answer to "why not X?" is often already here.
+4. `PROGRESS.md` — what is done, what is deliberately not, and known problems.
 5. The existing code and tests.
 
-Restore your bearings from those files plus `git status` and `git diff`. Do not
-assume any earlier conversation exists.
+## The repository is the memory
+
+There is no conversation history. Every session starts blank, and the only
+things that carry across are files:
+
+| Where | What it holds |
+| --- | --- |
+| `SPEC.md` | what the product should be |
+| `LOOP.md` | how autonomous development should operate |
+| `DECISIONS.md` | why the current durable design choices were made |
+| `PROGRESS.md` | where development currently stands |
+| `git` | implementation history |
+| `feedback/` | observations from real-world usage, if present |
+
+Two procedures in `LOOP.md` are mandatory, not advisory:
+
+- **`LOOP.md` §24 Context Recovery** — at the start of every session, before
+  the first decision. Read the files above, check `git status` / `git diff`,
+  and confirm `PROGRESS.md` still matches reality.
+- **`LOOP.md` §25 Loop Handoff** — before you stop, whatever the reason.
+  Update `PROGRESS.md`, record durable decisions in `DECISIONS.md`, note
+  unresolved work, and put the *actual* results of the verification commands in
+  `PROGRESS.md`. Green tests are not a finished loop; a repository a fresh
+  session can continue from is.
+
+Anything known only to you at the end of a session is lost. If the next agent
+needs it, write it down.
 
 ## The one rule you may not break
 
@@ -56,7 +81,9 @@ npm test          # node:test
 npm run package   # builds navigator.vsix
 ```
 
-`npm run verify` is the gate. Do not report work as done without it passing.
+`npm run verify` is the gate. Do not report work as done without it passing,
+and put the results you actually observed into `PROGRESS.md` before you stop
+(`LOOP.md` §25.2) — never copy the previous run's numbers.
 
 ## Layout
 

@@ -1,7 +1,12 @@
 # Decisions
 
-Decisions a future agent would otherwise re-litigate. Small choices are not
-recorded here; the code is.
+Why the current durable design choices were made — the `why` half of the
+repository's memory (`LOOP.md` §2.1). Decisions a future agent would otherwise
+re-litigate. Small choices are not recorded here; the code is.
+
+Read this before proposing an architecture change: the answer to "why not X?"
+is often already below. If a decision here is overturned, rewrite the entry and
+say what changed — do not delete it silently.
 
 ## Decision: The core is a `vscode`-free module, and that boundary is tested
 
@@ -163,6 +168,26 @@ The Responses API is the current surface and the only one that serves the
 Codex-family models; a Codex model is the right default for a job that is
 entirely diff reading. `status === 'incomplete'` is treated as a failed review
 rather than parsed, so a truncated response never becomes half a review.
+
+## Decision: The repository is the persistent memory, not the conversation
+
+`SPEC.md` (what), `LOOP.md` (how), `DECISIONS.md` (why), `PROGRESS.md` (where),
+git (history), and `feedback/` if it appears. `LOOP.md` §24 makes context
+recovery from those files mandatory at the start of every session, and §25
+makes a handoff into them mandatory before any loop stops.
+
+Reason:
+`LOOP.md` §1 assumes a human is not supervising each iteration, and sessions do
+not share context. The first loop produced facts that existed only in
+conversation — why the diff heuristic was loosened, which failure paths were
+deliberately left untested, that no live API call has ever been made. Anything
+in that category is lost at the session boundary, and the next agent pays for it
+by re-deriving it, or worse, by not knowing to.
+
+Consequence:
+Finishing a loop with green tests is not finishing. `LOOP.md` §27 puts "Loop
+Handoff complete" alongside "tests pass" in the Definition of Done, and §29
+requires the handoff even when stopping for an escalation or a blocker.
 
 ## Decision: Agent instructions live in AGENTS.md, with CLAUDE.md importing it
 

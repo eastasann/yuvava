@@ -1,77 +1,128 @@
 # Progress
 
-Working memory for the next iteration. See DECISIONS.md for the reasoning
-behind the shape of the code.
+Where development currently stands. Current working state, not a diary — the
+history is in `git log`. Read this after `SPEC.md`, `LOOP.md` and
+`DECISIONS.md`, as §24 Context Recovery describes.
+
+## Status
+
+The MVP is complete and verified. `SPEC.md` §19 Required is fully implemented,
+plus two Optional items (status bar, review intensity). Untracked files are
+reviewed, and both Anthropic and OpenAI can act as the reviewer.
+
+The first development loop has ended. No feature work is in progress and the
+working tree is clean. A fresh session can pick the next item from
+**Remaining** below.
 
 ## Verification
 
+Run from the repository root. `npm run verify` is the gate — do not report work
+as done without it passing.
+
 ```bash
 npm install
-npm run verify   # lint + compile + tests  (must be green before committing)
-npm run package  # produces navigator.vsix
+npm run lint      # eslint, zero warnings allowed
+npm run compile   # tsc
+npm test          # node:test
+npm run verify    # lint + compile + tests
+npm run package   # produces navigator.vsix
 ```
 
-## Done — MVP (SPEC §19 Required)
+Last executed on this tree (the handoff commit, Markdown-only on top of
+`516eeb6`), Node v22.22.2 / npm 10.9.7:
 
-- [x] Extension scaffold, activation, five commands, configuration.
-- [x] `Navigator: Review Current Changes`.
-- [x] Read-only git diff retrieval (`src/core/git.ts`, allowlisted subcommands).
-- [x] Untracked files reviewed via a synthesised `new file` diff
-      (`src/core/untracked.ts`, `src/core/workspaceDiff.ts`) — no `git add -N`.
-- [x] Unified-diff parsing and line-numbered rendering (`src/core/diff.ts`).
-- [x] AI review with a JSON output schema, via Anthropic (`claude-opus-5`) or
-      OpenAI (`gpt-5.1-codex-max`), selected by `navigator.provider` and built
-      in `src/core/providerFactory.ts`.
-- [x] Structured result parsing and validation (`src/core/schema.ts`).
-- [x] Code-generation sanitiser (`src/core/sanitize.ts`).
-- [x] Anchoring to reviewed hunks (`src/core/anchor.ts`).
-- [x] Diagnostics publishing (`src/vscode/diagnostics.ts`, `src/core/range.ts`).
-- [x] Silence when there is nothing to report.
-- [x] Failure paths: no git, bad base revision, no API key, no workspace,
-      oversized diff, malformed response, model refusal, empty response.
-- [x] Tests: 187 across diff, schema, sanitize, anchor, range, git (stubbed and
-      real), untracked-file synthesis, workspace diff composition, both
-      providers' wire shapes, provider selection, the review pipeline,
-      extension wiring, and the product invariant.
-- [x] `npm run package` produces a working `.vsix`.
+| Command | Result |
+| --- | --- |
+| `npm run lint` | exit 0, no warnings |
+| `npm run compile` | exit 0 |
+| `node --test "out/test/**/*.test.js"` | exit 0 — **187 pass, 0 fail**, 33 suites, ~0.8 s |
+| `npm run package` | exit 0 — `navigator.vsix`, 5509 files, 6.9 MB |
 
-## Done — Optional (SPEC §19)
+`npm run verify` runs lint + compile + tests together and exits 0.
+Re-run these before trusting the table if any source file has changed since.
 
-- [x] Status bar (§12.2) — hidden while idle, shows reviewing / N observations.
-- [x] Review intensity (§15) — `silent` / `normal` / `strict`, prompt-level only.
+## Done
 
-## Not started — Optional, deliberately
+### MVP (`SPEC.md` §19 Required)
 
-- [ ] Progressive hints (§8). Needs an interaction surface that does not become
-      a chat UI; the obvious designs all pull toward one. Think before building.
-- [ ] Documentation navigation (§10).
-- [ ] Recall assistance (§9).
-- [ ] Automatic review (§14). Requires debounce/cooldown; SPEC §13 says only
-      after the manual flow has proven useful.
-- [ ] Review history.
+- Extension activates, contributes five commands and seven settings.
+- `Navigator: Review Current Changes`.
+- Read-only git access — `src/core/git.ts`, allowlisted subcommands only.
+- Untracked files reviewed as a synthesised all-added diff —
+  `src/core/untracked.ts`, `src/core/workspaceDiff.ts`. No `git add -N`.
+- Unified-diff parsing and line-numbered rendering — `src/core/diff.ts`.
+- Review via Anthropic (`claude-opus-5`) or OpenAI (`gpt-5.1-codex-max`),
+  selected by `navigator.provider` — `src/core/providerFactory.ts`.
+- Structured output schema plus local validation — `src/core/schema.ts`.
+- Code-generation sanitiser — `src/core/sanitize.ts`.
+- Observations anchored to reviewed hunks — `src/core/anchor.ts`.
+- Diagnostics publishing — `src/vscode/diagnostics.ts`, `src/core/range.ts`.
+- Silence when there is nothing worth reporting.
+- Failure paths: no workspace, no git, unknown base revision, missing API key,
+  oversized diff, malformed/truncated response, model refusal, empty response,
+  cancellation.
+- 187 tests, including `test/invariant.test.ts` (the `SPEC.md` §16 guard) and
+  `test/gitIntegration.test.ts` (real git, asserts the working tree is
+  untouched afterwards).
 
-## Agent instructions
+### Optional (`SPEC.md` §19)
 
-`AGENTS.md` is the entry point for any coding agent (Codex, Claude Code, …);
-`CLAUDE.md` imports it. Keep the invariant section there in step with
-`test/invariant.test.ts`.
+- Status bar (§12.2) — hidden while idle; reviewing / N observations otherwise.
+- Review intensity (§15) — `silent` / `normal` / `strict`, prompt-level only.
 
-## Invariant
+## Remaining
 
-`test/invariant.test.ts` is the guard for SPEC §16. It reads Navigator's own
-source and fails if an edit path, code-action/completion/formatting provider,
-filesystem write, non-git subprocess, or an "apply/fix/generate/refactor"
-command is ever introduced. Do not weaken it to make a feature fit — the
-invariant is the product.
+Not started, and each is a deliberate hold rather than an oversight.
 
-## Known gaps
+- **Progressive hints (`SPEC.md` §8).** The obvious designs all drift toward a
+  chat UI, which §12.3 rejects. Settle the interaction surface before writing
+  code; this is a product decision, not an implementation one.
+- **Documentation navigation (§10).** Would need a source of documentation
+  links. Deciding where those come from is the hard part, not rendering them.
+- **Recall assistance (§9).** Same interaction-surface problem as §8.
+- **Automatic review (§14).** `SPEC.md` §13 says only after the manual flow has
+  proven useful — and it has not been used against a live API yet (see Known
+  problems). Needs debounce/cooldown when it happens.
+- **Review history.** No demand established.
+- **Live confirmation of both providers.** See Known problems; this is the
+  highest-value next step and needs only an API key.
 
-- No live API call has ever been made from this repository, for either provider
-  (no keys are available in the development environment). The provider tests
-  pin the exact wire request by injecting each SDK's `fetch`, so request shape,
-  headers and every response branch are verified — but the servers' acceptance
-  of those requests is not. Confirm each once against a real key.
-- No end-to-end test inside a real extension host. `test/extension.test.ts`
-  activates the extension against a fake `vscode` module instead, which covers
-  command registration, the failure paths and diagnostic conversion but not
-  VS Code's own rendering.
+## Known problems
+
+- **No live API call has ever been made, for either provider.** No keys exist
+  in the development environment. `test/anthropicProvider.test.ts` and
+  `test/openaiProvider.test.ts` pin the exact wire request by injecting each
+  SDK's `fetch`, so request shape, headers and every response branch are
+  verified — but no server has ever accepted these requests. Treat "the review
+  works end to end" as unproven until each provider is run once with a real key.
+- **No test inside a real extension host.** `test/extension.test.ts` activates
+  the extension against a fake `vscode` module (`test/fakes/vscode.ts`). That
+  covers command registration, failure paths and diagnostic conversion, but not
+  VS Code's own rendering, activation events, or packaging-time resolution of
+  `main`.
+- **Review quality is unmeasured.** Whether the prompt actually produces
+  high-signal, low-noise observations — the entire point of `SPEC.md` §7 — has
+  never been observed on real diffs. There is no eval.
+- **The `.vsix` carries both provider SDKs (6.9 MB)** so that one can be used.
+  Harmless but wasteful; `DECISIONS.md` records the levers (esbuild, or a
+  dynamic import of the selected provider) and why neither was pulled yet.
+- **`test/gitIntegration.test.ts` requires `git` on PATH.** It skips cleanly
+  when git is absent, which means a green run does not by itself prove the real
+  git path was exercised. Check for the skip message if it matters.
+
+## Notes for the next loop
+
+- `test/invariant.test.ts` is the guard for `SPEC.md` §16. It reads Navigator's
+  own source and fails if an edit path, code-action/completion/formatting
+  provider, filesystem write, non-git subprocess, or an
+  "apply/fix/generate/refactor" command appears. **Do not weaken it to make a
+  feature fit.** If a task seems to require breaking it, the task is wrong.
+- `AGENTS.md` is the entry point for any coding agent; `CLAUDE.md` imports it.
+  If the invariant list changes, change it in `AGENTS.md` and the test together.
+- The response schema in `src/core/schema.ts` marks every field `required`
+  because OpenAI strict mode demands it. `endLine` repeats `line` and `symbol`
+  may be `""`; the validator treats both as absent. Adding an optional field
+  means adding it to `required` with a documented empty value.
+- `src/core/` must never import `vscode`; `test/invariant.test.ts` enforces it.
+- No `feedback/` directory exists yet. If real-world usage starts producing
+  observations, that is where they go (`LOOP.md` §2.1).

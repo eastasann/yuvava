@@ -35,11 +35,43 @@ Agent は原則として、
 
 1. `SPEC.md`
 2. この `LOOP.md`
-3. Repository 内の既存コード・テスト・設定
-4. 使用しているライブラリやプラットフォームの公式ドキュメント
-5. 一般的なソフトウェア開発の慣習
+3. `DECISIONS.md`
+4. `PROGRESS.md`
+5. Repository 内の既存コード・テスト・設定
+6. 使用しているライブラリやプラットフォームの公式ドキュメント
+7. 一般的なソフトウェア開発の慣習
 
 矛盾がある場合は、より上位のものを優先する。
+
+### 2.1 Repository is the memory
+
+このプロジェクトの永続メモリは **repository そのもの** である。
+
+| Where | What it holds |
+| --- | --- |
+| `SPEC.md` | what the product should be |
+| `LOOP.md` | how autonomous development should operate |
+| `DECISIONS.md` | why the current durable design choices were made |
+| `PROGRESS.md` | where development currently stands |
+| `git` | implementation history |
+| `feedback/` | observations from real-world usage, if present |
+
+原則：
+
+> **Conversation history is not memory.**
+
+過去のsessionの会話は次のsessionに存在しない。したがって、
+
+- 会話でしか共有されていない事実は、存在しないものとして扱う
+- 次のiterationが必要とする情報は、必ず上記のいずれかに書く
+- 「前回話した通り」という前提でコードやドキュメントを書かない
+
+このルールが破られた場合、次のAgentは同じ調査・同じ判断・同じ失敗を繰り返す。
+それを防ぐことが §24 Context Recovery と §25 Loop Handoff の目的である。
+
+`feedback/` が存在する場合、それは実際の利用から得られた観測であり、Agentの
+推測より優先する。ただし `SPEC.md` を上書きはしない。矛盾する場合は §8.4 の
+escalation 対象になりうる。
 
 ---
 
@@ -47,6 +79,8 @@ Agent は原則として、
 
 Agent は以下のループを繰り返す。
 
+    Context Recovery   ← §24 / session開始時に必須
+      ↓
     Inspect
       ↓
     Decide
@@ -62,17 +96,26 @@ Agent は以下のループを繰り返す。
     PASS          NOT PASS
     │               │
     ↓               ↓
-    Done          Diagnose
-                    ↓
-                  Retry
+    Loop Handoff   Diagnose
+    ← §25 / 必須      ↓
+      ↓            Retry
+    Stop
 
 各iterationで、必ず現在の状態を確認してから次の作業を決定する。
+
+両端の2つは省略できない。
+
+- **開始時**: §24 Context Recovery を実行してから最初の判断を行う
+- **終了時**: §25 Loop Handoff を完了してから停止する
+
+途中で中断される場合も、可能な限り §25 を実行してから止まる。
 
 ---
 
 ## 4. Inspect
 
-各iterationの開始時に、必要に応じて以下を確認する。
+session開始時の復元は §24 Context Recovery に従う（必須）。
+以下は、そのあとの各iterationで必要に応じて確認するもの。
 
 - `SPEC.md`
 - `LOOP.md`
@@ -512,20 +555,34 @@ Optional featureの実装によってMVP完成が遅れる場合、Optional feat
 
 ---
 
-## 22. Decision Log
+## 22. Decision Log (DECISIONS.md)
 
-重要な判断を行った場合、必要に応じて `DECISIONS.md` に簡潔に記録する。
+`DECISIONS.md` は **why** を保持する。将来のAgentが同じ判断をやり直さないための
+ファイルであり、実装の要約ではない。
 
-記録対象の例：
+durable な判断を行った場合、`DECISIONS.md` への記録は **必須** である（§25）。
 
-- architecture choice
-- AI provider abstraction
-- structured output format
-- git integration approach
+### 22.1 記録するもの
+
+- architecture choice（層の分け方、依存の向き、テスト可能性のための境界）
+- product invariant をどう構造的に守っているか
+- provider / API / structured output の設計
+- git integration の方針
 - diagnostics mapping strategy
-- dependency choice
+- dependency の採否
+- 「なぜ X をやらなかったか」— 後から誰かが再提案しそうなもの
 
-形式例：
+### 22.2 記録しないもの
+
+- 変数名、ファイル分割、フォーマットなどの些末な選択
+- コードを読めば分かること（what）
+- 一度きりのバグ修正
+- 推測でしかない理由付け
+
+> 根拠のない理由を書かない。実装・`SPEC.md`・repository history から
+> 合理的に裏付けられる判断だけを記録する。
+
+### 22.3 形式
 
     ## Decision: Use VS Code Diagnostics for review output
 
@@ -539,64 +596,137 @@ Optional featureの実装によってMVP完成が遅れる場合、Optional feat
     Why this choice:
     Diagnostics integrates naturally with the editor and Problems panel.
 
-すべての小さな判断を記録する必要はない。
+必要に応じて `Consequence:` / `Escape hatch:` / `When to revisit:` を足す。
 
-将来のAgentが同じ判断をやり直しそうなものだけ残す。
+判断が後から覆された場合、古い項目を黙って消さない。書き換えた上で、
+なぜ変わったかを残す。
 
 ---
 
-## 23. Progress Tracking
+## 23. Progress Tracking (PROGRESS.md)
 
-必要に応じて `PROGRESS.md` を利用する。
+`PROGRESS.md` は **where development currently stands** を保持する。
 
-例：
+> PROGRESS.md is current working state, not a historical diary.
+
+過去に何をしたかの記録は `git log` の仕事である。`PROGRESS.md` には
+「いま何が終わっていて、次に何が必要か」だけを書く。完了した項目の履歴が
+膨らんできたら削る。
+
+### 23.1 必須セクション
 
     # Progress
 
-    ## Done
+    ## Status              現在地を数行で。次のAgentが最初に読む部分
+    ## Verification        コマンドと、最後に実行した実際の結果
+    ## Done                完了した capability（SPEC の要件と対応付ける）
+    ## Remaining           未着手・未解決の作業と、その理由
+    ## Known problems      既知の欠陥・ギャップ・信用してはいけない箇所
+    ## Notes for the next loop   次のsessionが真っ先に知るべきこと
 
-    - Extension scaffold
-    - Review command
-    - Git diff retrieval
+### 23.2 ルール
 
-    ## Current
-
-    - Structured review result parsing
-
-    ## Remaining
-
-    - Diagnostics
-    - Error handling
-    - Tests
-    - Packaging
-
-Progress documentは人間向けレポートではなく、
-
-> 次のAgent iterationがすぐ作業を再開するためのmemory
-
-として扱う。
+- 「たぶん動く」と書かない。検証したか、していないかを書く
+- 意図的にやらないことは "Remaining" ではなく理由と共に明示する
+- Known problems を空にするために問題を消さない
+- 実際にコマンドを実行して結果を書く（§25.2）
 
 ---
 
 ## 24. Context Recovery
 
-新しいAgent sessionになった場合、まず以下から現在状態を復元する。
-
-1. `SPEC.md`
-2. `LOOP.md`
-3. `PROGRESS.md` if present
-4. `DECISIONS.md` if present
-5. git status
-6. git diff
-7. relevant tests
+**すべてのsessionの開始時に必須。**
 
 過去のconversation contextが存在することを前提にしない。
+新しいsessionは、次の入力だけで作業を再開できなければならない。
 
-Repository自体から作業状態を復元できるようにする。
+    Read SPEC.md and LOOP.md.
+    Continue according to LOOP.md.
+
+### 24.1 手順
+
+以下の順で現在状態を復元する。
+
+1. `SPEC.md` — 何を作るのか。ここが最上位の source of truth
+2. `LOOP.md` — どう進めるのか（このファイル）
+3. `DECISIONS.md` — なぜ今の設計なのか。**アーキテクチャを変える提案の前に必読**
+4. `PROGRESS.md` — どこまで進んでいるか、既知の問題は何か
+5. `git status` / `git diff` — 未コミットの変更が残っていないか
+6. `git log --oneline -20` — 直近で何が起きたか
+7. `feedback/` — 存在する場合、実利用からの観測
+8. 未解決の feedback / issue / レビュー指摘
+9. 関連するテスト — 何が保証されていて、何が保証されていないか
+
+### 24.2 復元後に確認すること
+
+- 作業ツリーは clean か。clean でない場合、その変更は誰のものか
+- `PROGRESS.md` の Verification は、いま実行しても同じ結果になるか
+  （疑わしい場合は実行して確かめる。推測で先に進まない）
+- `PROGRESS.md` の Known problems に、今回触る領域のものはないか
+- `DECISIONS.md` に、これからやろうとしていることを既に否定した項目はないか
+
+### 24.3 矛盾を見つけた場合
+
+ドキュメントと実装が食い違っている場合、実装が正しいとは限らない。
+
+1. `SPEC.md` を基準に、どちらが正しいかを判断する
+2. ドキュメントが古いなら、そのiterationで直す
+3. 実装が仕様から外れているなら、それは修正すべき欠陥である
+4. どちらとも言えない場合は `PROGRESS.md` の Known problems に記録する
+
+黙って放置しない。次のAgentが同じ矛盾に躓く。
 
 ---
 
-## 25. Git
+## 25. Loop Handoff
+
+**すべてのloopの終了前に必須。**
+
+Loop の成果物はコードだけではない。
+**次の完全にまっさらなAgent sessionが継続できる repository state** が成果物である。
+
+コードが動いていても handoff が終わっていなければ、そのloopは完了していない。
+
+### 25.1 Handoff checklist
+
+停止する前に、以下をすべて満たす。
+
+- [ ] `PROGRESS.md` を現在の状態に更新した
+      （Status / Done / Remaining / Known problems / Notes for the next loop）
+- [ ] durable な判断をしたなら `DECISIONS.md` に記録した（§22）
+      — していないなら「今回は durable な判断はなかった」と言えること
+- [ ] 未解決の作業を記録した
+      — 途中で止めたもの、意図的に見送ったもの、その理由
+- [ ] verification を実際に実行し、その結果を `PROGRESS.md` に書いた（§25.2）
+- [ ] 新しく分かった制約・落とし穴・信用できない箇所を Known problems に書いた
+- [ ] `SPEC.md` / `LOOP.md` / `AGENTS.md` と実装の食い違いを直したか、記録した
+- [ ] 変更を commit した。作業ツリーに説明のない差分を残していない
+- [ ] `git log` のメッセージだけで「何が変わったか」が追える
+
+### 25.2 Verification results は実測値
+
+`PROGRESS.md` の Verification セクションには、**実際に実行した結果**を書く。
+
+    npm run lint      # 実行して exit code を確認
+    npm run compile
+    npm test
+    npm run package
+
+前回の値をコピーしない。テスト数が変わっていれば、それ自体が情報である。
+実行できなかった場合は、実行できなかったと書く。
+
+### 25.3 会話で終わらせない
+
+このloopの中でしか存在しない情報を、会話の中に置き去りにしない。
+
+次のAgentが知る必要があるなら、それは repository の中になければならない。
+
+- 「APIのこの挙動に注意」→ コードのコメント、または Known problems
+- 「この設計にしたのは〜だから」→ `DECISIONS.md`
+- 「あと残っているのは〜」→ `PROGRESS.md`
+- 「このテストは環境依存」→ Known problems
+
+### 25.4 Git
 
 可能な限りgitを安全網として利用する。
 
@@ -607,6 +737,9 @@ Repository自体から作業状態を復元できるようにする。
 意図しない既存変更を勝手に削除しない。
 
 Agent自身が作成していない変更が存在する場合、それを壊さないよう注意する。
+
+Handoff時点で作業ツリーは clean であることが望ましい。未コミットの変更を
+残して止まる場合は、その理由を `PROGRESS.md` に書く。
 
 ---
 
@@ -648,6 +781,12 @@ Agent自身が作成していない変更が存在する場合、それを壊さ
 
 - `SPEC.md` のRequired MVP requirementsを満たしている
 
+### Handoff
+
+- §25 Loop Handoff checklist をすべて満たしている
+- `PROGRESS.md` の Verification が実測値である
+- 新しいsessionが `SPEC.md` と `LOOP.md` だけで作業を再開できる
+
 ---
 
 ## 27. Definition of Done
@@ -669,8 +808,13 @@ Definition of Done:
     core invariants verified
         AND
     no known blocking defects
+        AND
+    Loop Handoff complete (§25)
 
 この条件を満たした場合のみloopを終了する。
+
+最後の条件は他と同じ重さを持つ。次のAgentが継続できない状態で止まることは、
+テストが落ちている状態で止まることと同じである。
 
 ---
 
@@ -687,6 +831,8 @@ Definition of Done:
 - user source codeを書き換える経路がないか
 - failure pathが安全か
 - testが実装詳細だけを確認していないか
+- `PROGRESS.md` / `DECISIONS.md` を読むだけで、この状態を引き継げるか
+- このsessionの会話にしか存在しない重要な情報が残っていないか
 
 問題があれば修正して再度verificationする。
 
@@ -696,6 +842,9 @@ Definition of Done:
 
 Loopを終了してよいのは以下の場合。
 
+いずれの場合も、停止する前に §25 Loop Handoff を実行する。
+理由が何であれ、次のAgentは repository から状況を理解できなければならない。
+
 ### Success
 
 Definition of Doneを満たした。
@@ -704,9 +853,14 @@ Definition of Doneを満たした。
 
 自律的に解決できない、明確なescalation conditionに到達した。
 
+何をescalationしたのか、何を待っているのかを `PROGRESS.md` に書いてから止まる。
+
 ### Environment Blocker
 
 必要なcredential、runtime、external serviceなどが存在せず、合理的なmock/stubでも進められない。
+
+何が足りなかったのかを Known problems に書いてから止まる。次のsessionの
+環境では解決しているかもしれない。
 
 単なる、
 
@@ -795,3 +949,12 @@ Navigatorの「Human is the Driver」という思想を壊さない。
 > **SPECを満たし、verificationが通り、core invariantが守られている状態**
 
 になるまでloopを継続する。
+
+そして停止する前に、§25 Loop Handoff を完了する。
+
+次のsessionは、この入力だけで再開する。
+
+    Read SPEC.md and LOOP.md.
+    Continue according to LOOP.md.
+
+それで足りる状態にしておくことが、このloopの最後の仕事である。
