@@ -12,7 +12,8 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { after, before, describe, it } from 'node:test';
-import { findRepositoryRoot, getWorkingTreeDiff } from '../src/core/git.js';
+import { findRepositoryRoot, getWorkingTreeDiff, listUntrackedFiles } from '../src/core/git.js';
+import { collectWorkspaceDiff } from '../src/core/workspaceDiff.js';
 import { parseUnifiedDiff, renderAnnotatedDiff, reviewableFiles } from '../src/core/diff.js';
 import { runReview } from '../src/core/review.js';
 import type { ReviewProvider } from '../src/core/provider.js';
@@ -131,8 +132,51 @@ describe('git integration', { skip: gitAvailable() ? false : 'git is not install
     assert.match(report.notes[0], /discarded cart\.js:900/);
   });
 
+  it('lists untracked files and honours .gitignore', async () => {
+    writeFileSync(path.join(repo!, '.gitignore'), 'ignored.js\n');
+    writeFileSync(path.join(repo!, 'helper.js'), 'export const x = 1;\n');
+    writeFileSync(path.join(repo!, 'ignored.js'), 'export const secret = 1;\n');
+
+    const untracked = await listUntrackedFiles({ cwd: repo! });
+    assert.ok(untracked.includes('helper.js'));
+    assert.equal(untracked.includes('ignored.js'), false, '.gitignore must be respected');
+  });
+
+  it('reviews an untracked file as part of the same diff', async () => {
+    const result = await collectWorkspaceDiff({
+      root: repo!,
+      base: 'HEAD',
+      maxDiffBytes: 200000,
+      includeUntracked: true,
+    });
+
+    const files = reviewableFiles(parseUnifiedDiff(result.diff));
+    const paths = files.map((file) => file.path).sort();
+    assert.deepEqual(paths, ['.gitignore', 'cart.js', 'helper.js']);
+    assert.equal(files.find((file) => file.path === 'ignored.js'), undefined);
+
+    const rendered = renderAnnotatedDiff(files);
+    assert.match(rendered, /^\s+1 \+export const x = 1;$/m);
+  });
+
+  it('excludes untracked files when asked to', async () => {
+    const result = await collectWorkspaceDiff({
+      root: repo!,
+      base: 'HEAD',
+      maxDiffBytes: 200000,
+      includeUntracked: false,
+    });
+    const paths = reviewableFiles(parseUnifiedDiff(result.diff)).map((file) => file.path);
+    assert.deepEqual(paths, ['cart.js']);
+  });
+
   it('leaves the working tree exactly as it found it', async () => {
     const status = execFileSync('git', ['status', '--porcelain'], { cwd: repo!, encoding: 'utf8' });
-    assert.equal(status.trim(), 'M cart.js', 'Navigator must not stage, stash or revert anything');
+    const lines = status.trim().split('\n').sort();
+    assert.deepEqual(
+      lines,
+      ['?? .gitignore', '?? helper.js', 'M cart.js'].sort(),
+      'Navigator must not stage, stash, ignore or revert anything',
+    );
   });
 });

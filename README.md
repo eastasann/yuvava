@@ -15,7 +15,9 @@ for why it is built the way it is.
 
 ## What it does
 
-- `Navigator: Review Current Changes` reviews your working-tree diff.
+- `Navigator: Review Current Changes` reviews your working-tree diff, including
+  new files git is not tracking yet (`.gitignore` is honoured, and nothing is
+  ever staged to make them visible).
 - Real problems show up as **diagnostics** in the editor and the Problems panel:
   correctness bugs, missed edge cases, unhandled null/undefined, error handling
   gaps, and — at higher intensity — concurrency, security and performance risks.
@@ -54,6 +56,7 @@ for why it is built the way it is.
 | `navigator.model` | `claude-opus-5` | Model used for review. |
 | `navigator.reviewIntensity` | `normal` | `silent`, `normal` or `strict` (SPEC §15). |
 | `navigator.diffBase` | `HEAD` | Revision the working tree is compared against. |
+| `navigator.includeUntracked` | `true` | Also review new, untracked files. |
 | `navigator.maxDiffBytes` | `200000` | Diffs above this size are not sent. |
 | `navigator.maxObservations` | `20` | Cap on observations per review. |
 

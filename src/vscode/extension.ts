@@ -9,7 +9,8 @@
 
 import * as vscode from 'vscode';
 import { AnthropicReviewProvider } from '../core/anthropicProvider.js';
-import { GitError, findRepositoryRoot, getWorkingTreeDiff } from '../core/git.js';
+import { GitError, findRepositoryRoot } from '../core/git.js';
+import { collectWorkspaceDiff } from '../core/workspaceDiff.js';
 import { ReviewUnavailableError } from '../core/provider.js';
 import { runReview } from '../core/review.js';
 import { readConfig } from './config.js';
@@ -145,7 +146,20 @@ async function reviewCurrentChanges(
         let diff: string;
         try {
           repositoryRoot = await findRepositoryRoot(runOptions);
-          diff = await getWorkingTreeDiff(config.diffBase, { ...runOptions, cwd: repositoryRoot });
+          const workspaceDiff = await collectWorkspaceDiff({
+            root: repositoryRoot,
+            base: config.diffBase,
+            maxDiffBytes: config.maxDiffBytes,
+            includeUntracked: config.includeUntracked,
+            signal: abort.signal,
+          });
+          diff = workspaceDiff.diff;
+          if (workspaceDiff.untrackedCount > 0) {
+            log.info(`including ${workspaceDiff.untrackedCount} untracked file(s)`);
+          }
+          for (const skipped of workspaceDiff.skipped) {
+            log.info(`skipped untracked ${skipped.path}: ${skipped.reason}`);
+          }
         } catch (error) {
           if (error instanceof GitError) {
             statusBar.setIdle();

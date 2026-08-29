@@ -16,6 +16,8 @@ npm run package  # produces navigator.vsix
 - [x] Extension scaffold, activation, five commands, configuration.
 - [x] `Navigator: Review Current Changes`.
 - [x] Read-only git diff retrieval (`src/core/git.ts`, allowlisted subcommands).
+- [x] Untracked files reviewed via a synthesised `new file` diff
+      (`src/core/untracked.ts`, `src/core/workspaceDiff.ts`) — no `git add -N`.
 - [x] Unified-diff parsing and line-numbered rendering (`src/core/diff.ts`).
 - [x] AI review via the Anthropic Messages API with a JSON output schema
       (`src/core/anthropicProvider.ts`).
@@ -26,9 +28,10 @@ npm run package  # produces navigator.vsix
 - [x] Silence when there is nothing to report.
 - [x] Failure paths: no git, bad base revision, no API key, no workspace,
       oversized diff, malformed response, model refusal, empty response.
-- [x] Tests: 140 across diff, schema, sanitize, anchor, range, git (stubbed and
-      real), the Anthropic request wire shape, the review pipeline, extension
-      wiring, and the product invariant.
+- [x] Tests: 161 across diff, schema, sanitize, anchor, range, git (stubbed and
+      real), untracked-file synthesis, workspace diff composition, the Anthropic
+      request wire shape, the review pipeline, extension wiring, and the
+      product invariant.
 - [x] `npm run package` produces a working `.vsix`.
 
 ## Done — Optional (SPEC §19)

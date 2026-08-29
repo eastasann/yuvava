@@ -6,6 +6,7 @@ export interface NavigatorConfig {
   readonly model: string;
   readonly intensity: ReviewIntensity;
   readonly diffBase: string;
+  readonly includeUntracked: boolean;
   readonly maxDiffBytes: number;
   readonly maxObservations: number;
 }
@@ -25,6 +26,7 @@ export function readConfig(scope?: vscode.Uri): NavigatorConfig {
     model: section.get<string>('model', DEFAULT_MODEL).trim() || DEFAULT_MODEL,
     intensity,
     diffBase: section.get<string>('diffBase', 'HEAD').trim() || 'HEAD',
+    includeUntracked: section.get<boolean>('includeUntracked', true) !== false,
     maxDiffBytes: positiveNumber(section.get('maxDiffBytes'), 200000),
     maxObservations: positiveNumber(section.get('maxObservations'), 20),
   };

@@ -92,9 +92,33 @@ Reason:
 An allowlist is checkable; "we only run safe commands" is not.
 
 Consequence:
-Untracked files are not reviewed, because including them would mean running
-`git add -N`, which writes to the index. Reviewing `git diff HEAD` (staged plus
-unstaged) is the largest read-only view available.
+`git add -N` — the usual way to make untracked files appear in `git diff` — is
+a write, so it is not available. See the next decision for how new files are
+reviewed instead.
+
+## Decision: Untracked files are reviewed via a synthesised diff, not `git add -N`
+
+`git ls-files --others --exclude-standard -z` lists them, each file is read,
+and `src/core/untracked.ts` renders it as a `new file` hunk in which every line
+is an addition. The result is concatenated with the tracked diff, so parsing,
+prompting and anchoring stay unaware that two sources exist.
+
+Reason:
+A newly written file is exactly the code most worth a second pair of eyes, and
+excluding it made the review blind to the common case of "I just wrote this".
+The obvious implementation, `git add -N`, writes to the index — refused by the
+allowlist in `src/core/git.ts` and by the invariant test.
+
+Guards:
+`--exclude-standard` means `.gitignore` is honoured, so ignored build output
+never reaches the model. Individual files are skipped when they are empty,
+binary (a NUL byte in the first 8 KB), or over 64 KiB, and the set as a whole
+is capped at half the diff budget — a stray untracked data dump degrades the
+review to a skip note rather than failing it. Content lines are `+`-prefixed,
+so a file that itself contains diff syntax cannot forge a hunk header.
+
+Escape hatch:
+`navigator.includeUntracked`, default true.
 
 ## Decision: The API key lives in VS Code secret storage, not settings
 

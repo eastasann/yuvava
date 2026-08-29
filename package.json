@@ -67,6 +67,11 @@
           "default": "HEAD",
           "markdownDescription": "Git revision the working tree is diffed against, e.g. `HEAD` or `origin/main`."
         },
+        "navigator.includeUntracked": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Also review new files git is not tracking yet. Files ignored by `.gitignore` are never included, and Navigator reads them without ever writing to the index."
+        },
         "navigator.maxDiffBytes": {
           "type": "number",
           "default": 200000,

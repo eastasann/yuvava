@@ -152,3 +152,25 @@ export async function getWorkingTreeDiff(
     runner,
   );
 }
+
+/**
+ * Paths of files git is not tracking, honouring `.gitignore` and friends.
+ *
+ * `--others --exclude-standard` is how the working tree's new files are found
+ * without writing to the index: `git add -N`, the usual way to make untracked
+ * files show up in `git diff`, is a write and therefore out of bounds.
+ */
+export async function listUntrackedFiles(
+  options: RunOptions,
+  runner: GitRunner = defaultRunner,
+): Promise<string[]> {
+  const output = await runGit(
+    ['ls-files', '--others', '--exclude-standard', '-z'],
+    options,
+    runner,
+  );
+  return output
+    .split('\0')
+    .map((path) => path.trim())
+    .filter((path) => path.length > 0);
+}
