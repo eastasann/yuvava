@@ -1,0 +1,17 @@
+.git/**
+.gitattributes
+.github/**
+.vscode/**
+.vscode-test/**
+out/test/**
+out/**/*.js.map
+src/**
+test/**
+node_modules/.bin/**
+eslint.config.mjs
+tsconfig.json
+*.vsix
+DECISIONS.md
+LOOP.md
+PROGRESS.md
+SPEC.md
