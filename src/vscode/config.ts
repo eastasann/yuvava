@@ -1,8 +1,9 @@
 import * as vscode from 'vscode';
-import { DEFAULT_MODEL } from '../core/anthropicProvider.js';
-import { REVIEW_INTENSITIES, type ReviewIntensity } from '../core/types.js';
+import { PROVIDER_KINDS, REVIEW_INTENSITIES, type ProviderKind, type ReviewIntensity } from '../core/types.js';
 
 export interface NavigatorConfig {
+  readonly provider: ProviderKind;
+  /** Blank means "this provider's default model". */
   readonly model: string;
   readonly intensity: ReviewIntensity;
   readonly diffBase: string;
@@ -15,16 +16,17 @@ function positiveNumber(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.trunc(value) : fallback;
 }
 
+function oneOf<T extends string>(value: unknown, allowed: readonly T[], fallback: T): T {
+  return typeof value === 'string' && (allowed as readonly string[]).includes(value) ? (value as T) : fallback;
+}
+
 export function readConfig(scope?: vscode.Uri): NavigatorConfig {
   const section = vscode.workspace.getConfiguration('navigator', scope);
-  const rawIntensity = section.get<string>('reviewIntensity', 'normal');
-  const intensity = (REVIEW_INTENSITIES as readonly string[]).includes(rawIntensity)
-    ? (rawIntensity as ReviewIntensity)
-    : 'normal';
 
   return {
-    model: section.get<string>('model', DEFAULT_MODEL).trim() || DEFAULT_MODEL,
-    intensity,
+    provider: oneOf(section.get('provider'), PROVIDER_KINDS, 'anthropic'),
+    model: section.get<string>('model', '').trim(),
+    intensity: oneOf(section.get('reviewIntensity'), REVIEW_INTENSITIES, 'normal'),
     diffBase: section.get<string>('diffBase', 'HEAD').trim() || 'HEAD',
     includeUntracked: section.get<boolean>('includeUntracked', true) !== false,
     maxDiffBytes: positiveNumber(section.get('maxDiffBytes'), 200000),

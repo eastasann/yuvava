@@ -29,7 +29,7 @@ export const REVIEW_OUTPUT_SCHEMA = {
           },
           endLine: {
             type: 'integer',
-            description: 'Last line of the affected range. Same as line when it is a single line.',
+            description: 'Last line of the affected range. Repeat "line" when it is a single line.',
           },
           severity: {
             type: 'string',
@@ -46,10 +46,15 @@ export const REVIEW_OUTPUT_SCHEMA = {
           },
           symbol: {
             type: 'string',
-            description: 'An identifier appearing on that line, used only to place the underline.',
+            description:
+              'An identifier appearing on that line, used only to place the underline. Empty string when there is no obvious one.',
           },
         },
-        required: ['file', 'line', 'severity', 'category', 'message'],
+        // Every field is required, and the two that are conceptually optional
+        // carry a documented empty value instead. This keeps one schema valid
+        // under both Anthropic structured outputs and OpenAI strict mode,
+        // which requires `required` to list every property.
+        required: ['file', 'line', 'endLine', 'severity', 'category', 'message', 'symbol'],
         additionalProperties: false,
       },
     },

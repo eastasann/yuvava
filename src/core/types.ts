@@ -10,6 +10,11 @@ export type Severity = 'error' | 'warning' | 'info';
 
 export const SEVERITIES: readonly Severity[] = ['error', 'warning', 'info'];
 
+/** Which service performs the review. Both are held to the same contract. */
+export type ProviderKind = 'anthropic' | 'openai';
+
+export const PROVIDER_KINDS: readonly ProviderKind[] = ['anthropic', 'openai'];
+
 /** Review strength. No intensity ever permits code generation. */
 export type ReviewIntensity = 'silent' | 'normal' | 'strict';
 

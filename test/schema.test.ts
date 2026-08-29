@@ -108,6 +108,27 @@ describe('parseReviewResponse', () => {
     assert.equal(result.problems.length, 6);
   });
 
+  it('treats the documented empty values as absent', () => {
+    const result = parseReviewResponse(
+      JSON.stringify({
+        issues: [
+          {
+            file: 'a.ts',
+            line: 5,
+            endLine: 5,
+            severity: 'info',
+            category: 'edge-case',
+            message: 'the empty case is unhandled here.',
+            symbol: '',
+          },
+        ],
+      }),
+    );
+    assert.deepEqual(result.problems, []);
+    assert.equal(result.issues[0].symbol, undefined);
+    assert.equal(result.issues[0].endLine, 5);
+  });
+
   it('coerces a numeric string line and defaults endLine and category', () => {
     const result = parseReviewResponse(
       JSON.stringify({
@@ -153,5 +174,13 @@ describe('REVIEW_OUTPUT_SCHEMA', () => {
       'symbol',
     ]);
     assert.equal(REVIEW_OUTPUT_SCHEMA.properties.issues.items.additionalProperties, false);
+  });
+
+  it('is valid under strict structured output on both providers', () => {
+    // OpenAI strict mode requires every property to appear in `required`.
+    const items = REVIEW_OUTPUT_SCHEMA.properties.issues.items;
+    assert.deepEqual([...items.required].sort(), Object.keys(items.properties).sort());
+    assert.equal(REVIEW_OUTPUT_SCHEMA.additionalProperties, false);
+    assert.deepEqual([...REVIEW_OUTPUT_SCHEMA.required], Object.keys(REVIEW_OUTPUT_SCHEMA.properties));
   });
 });

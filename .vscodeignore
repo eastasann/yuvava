@@ -12,6 +12,7 @@ node_modules/.bin/**
 eslint.config.mjs
 tsconfig.json
 *.vsix
+AGENTS.md
 DECISIONS.md
 LOOP.md
 PROGRESS.md

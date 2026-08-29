@@ -8,16 +8,16 @@
  */
 
 import * as vscode from 'vscode';
-import { AnthropicReviewProvider } from '../core/anthropicProvider.js';
+import { createReviewProvider, providerProfile } from '../core/providerFactory.js';
 import { GitError, findRepositoryRoot } from '../core/git.js';
 import { collectWorkspaceDiff } from '../core/workspaceDiff.js';
 import { ReviewUnavailableError } from '../core/provider.js';
 import { runReview } from '../core/review.js';
+import type { ProviderKind } from '../core/types.js';
 import { readConfig } from './config.js';
 import { publishObservations } from './diagnostics.js';
 import { NavigatorStatusBar } from './statusBar.js';
 
-const API_KEY_SECRET = 'navigator.anthropicApiKey';
 const TRANSIENT_MESSAGE_MS = 4000;
 
 let reviewInFlight = false;
@@ -37,10 +37,15 @@ export function activate(context: vscode.ExtensionContext): void {
       diagnostics.clear();
       statusBar.setIdle();
     }),
-    vscode.commands.registerCommand('navigator.setApiKey', () => setApiKey(context, log)),
+    vscode.commands.registerCommand('navigator.setApiKey', () =>
+      setApiKey(context, activeProvider(), log),
+    ),
     vscode.commands.registerCommand('navigator.clearApiKey', async () => {
-      await context.secrets.delete(API_KEY_SECRET);
-      void vscode.window.showInformationMessage('Navigator: stored API key removed.');
+      const profile = providerProfile(activeProvider());
+      await context.secrets.delete(profile.secretKey);
+      void vscode.window.showInformationMessage(
+        `Navigator: stored ${profile.displayName} API key removed.`,
+      );
     }),
     vscode.commands.registerCommand('navigator.showLog', () => log.show(true)),
   );
@@ -61,18 +66,33 @@ function currentWorkspaceFolder(): vscode.WorkspaceFolder | undefined {
   return vscode.workspace.workspaceFolders?.[0];
 }
 
-async function resolveApiKey(context: vscode.ExtensionContext): Promise<string | undefined> {
-  const stored = await context.secrets.get(API_KEY_SECRET);
+/** The configured provider, for commands that run outside a review. */
+function activeProvider(): ProviderKind {
+  const folder = currentWorkspaceFolder();
+  return readConfig(folder?.uri).provider;
+}
+
+async function resolveApiKey(
+  context: vscode.ExtensionContext,
+  kind: ProviderKind,
+): Promise<string | undefined> {
+  const profile = providerProfile(kind);
+  const stored = await context.secrets.get(profile.secretKey);
   if (stored !== undefined && stored.trim().length > 0) {
     return stored.trim();
   }
-  const fromEnv = process.env.ANTHROPIC_API_KEY;
+  const fromEnv = process.env[profile.apiKeyEnvVar];
   return fromEnv !== undefined && fromEnv.trim().length > 0 ? fromEnv.trim() : undefined;
 }
 
-async function setApiKey(context: vscode.ExtensionContext, log: vscode.LogOutputChannel): Promise<void> {
+async function setApiKey(
+  context: vscode.ExtensionContext,
+  kind: ProviderKind,
+  log: vscode.LogOutputChannel,
+): Promise<void> {
+  const profile = providerProfile(kind);
   const key = await vscode.window.showInputBox({
-    title: 'Navigator: Anthropic API key',
+    title: `Navigator: ${profile.displayName} API key`,
     prompt: 'Stored in VS Code secret storage. Leave empty to cancel.',
     password: true,
     ignoreFocusOut: true,
@@ -80,18 +100,23 @@ async function setApiKey(context: vscode.ExtensionContext, log: vscode.LogOutput
   if (key === undefined || key.trim().length === 0) {
     return;
   }
-  await context.secrets.store(API_KEY_SECRET, key.trim());
-  log.info('API key stored in secret storage');
-  void vscode.window.showInformationMessage('Navigator: API key saved.');
+  await context.secrets.store(profile.secretKey, key.trim());
+  log.info(`${profile.displayName} API key stored in secret storage`);
+  void vscode.window.showInformationMessage(`Navigator: ${profile.displayName} API key saved.`);
 }
 
-async function promptForMissingApiKey(context: vscode.ExtensionContext, log: vscode.LogOutputChannel): Promise<void> {
+async function promptForMissingApiKey(
+  context: vscode.ExtensionContext,
+  kind: ProviderKind,
+  log: vscode.LogOutputChannel,
+): Promise<void> {
+  const profile = providerProfile(kind);
   const choice = await vscode.window.showWarningMessage(
-    'Navigator: no Anthropic API key configured.',
+    `Navigator: no ${profile.displayName} API key configured (or ${profile.apiKeyEnvVar} in the environment).`,
     'Set API Key',
   );
   if (choice === 'Set API Key') {
-    await setApiKey(context, log);
+    await setApiKey(context, kind, log);
   }
 }
 
@@ -124,9 +149,9 @@ async function reviewCurrentChanges(
   }
 
   const config = readConfig(folder.uri);
-  const apiKey = await resolveApiKey(context);
+  const apiKey = await resolveApiKey(context, config.provider);
   if (apiKey === undefined) {
-    await promptForMissingApiKey(context, log);
+    await promptForMissingApiKey(context, config.provider, log);
     return;
   }
 
@@ -174,7 +199,11 @@ async function reviewCurrentChanges(
           intensity: config.intensity,
           maxObservations: config.maxObservations,
           maxDiffBytes: config.maxDiffBytes,
-          provider: new AnthropicReviewProvider({ apiKey, model: config.model }),
+          provider: createReviewProvider({
+            kind: config.provider,
+            apiKey,
+            model: config.model,
+          }),
           signal: abort.signal,
         });
 
@@ -206,8 +235,11 @@ async function reviewCurrentChanges(
           log.info(note);
         }
 
+        const profile = providerProfile(config.provider);
         log.info(
-          `reviewed ${report.files.length} file(s) at intensity "${config.intensity}": ${published.shown} observation(s)`,
+          `reviewed ${report.files.length} file(s) with ${profile.displayName} ` +
+            `${config.model || profile.defaultModel} at intensity "${config.intensity}": ` +
+            `${published.shown} observation(s)`,
         );
         statusBar.setObservations(published.shown);
 

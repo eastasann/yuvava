@@ -50,7 +50,8 @@ const REQUIRED_COMMANDS = [
   'navigator.showLog',
 ];
 
-let savedApiKey: string | undefined;
+let savedKeys: Record<string, string | undefined> = {};
+const API_KEY_VARS = ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY'];
 
 describe('activation', () => {
   beforeEach(() => {
@@ -78,19 +79,24 @@ describe('activation', () => {
 
 describe('review command failure paths', () => {
   before(() => {
-    savedApiKey = process.env.ANTHROPIC_API_KEY;
-    delete process.env.ANTHROPIC_API_KEY;
+    savedKeys = Object.fromEntries(API_KEY_VARS.map((name) => [name, process.env[name]]));
   });
 
   after(() => {
-    if (savedApiKey !== undefined) {
-      process.env.ANTHROPIC_API_KEY = savedApiKey;
+    for (const [name, value] of Object.entries(savedKeys)) {
+      if (value === undefined) {
+        delete process.env[name];
+      } else {
+        process.env[name] = value;
+      }
     }
   });
 
   beforeEach(() => {
     fake.reset();
-    delete process.env.ANTHROPIC_API_KEY;
+    for (const name of API_KEY_VARS) {
+      delete process.env[name];
+    }
     extension.activate(fake.makeExtensionContext() as never);
   });
 
@@ -105,6 +111,31 @@ describe('review command failure paths', () => {
     await fake.commands.executeCommand('navigator.reviewChanges');
     assert.equal(fake.recorded.warnings.length, 1);
     assert.match(fake.recorded.warnings[0], /no Anthropic API key/);
+  });
+
+  it('names the configured provider when its key is missing', async () => {
+    fake.recorded.configuration = { provider: 'openai' };
+    fake.recorded.workspaceFolders = [{ uri: { fsPath: '/tmp/does-not-exist' }, name: 'w', index: 0 }];
+    await fake.commands.executeCommand('navigator.reviewChanges');
+    assert.match(fake.recorded.warnings[0], /no OpenAI API key/);
+    assert.match(fake.recorded.warnings[0], /OPENAI_API_KEY/);
+  });
+
+  it('reads the API key of the configured provider from the environment', async () => {
+    // With an OpenAI key present but Anthropic selected, the review must still
+    // stop for a missing key rather than reach for the wrong one.
+    process.env.OPENAI_API_KEY = 'openai-key';
+    fake.recorded.workspaceFolders = [{ uri: { fsPath: '/tmp/does-not-exist' }, name: 'w', index: 0 }];
+    await fake.commands.executeCommand('navigator.reviewChanges');
+    assert.match(fake.recorded.warnings[0], /no Anthropic API key/);
+  });
+
+  it('keeps each provider key in its own secret', async () => {
+    fake.recorded.configuration = { provider: 'openai' };
+    fake.recorded.secrets.set('navigator.anthropicApiKey', 'anthropic-key');
+    fake.recorded.workspaceFolders = [{ uri: { fsPath: '/tmp/does-not-exist' }, name: 'w', index: 0 }];
+    await fake.commands.executeCommand('navigator.reviewChanges');
+    assert.match(fake.recorded.warnings[0], /no OpenAI API key/);
   });
 
   it('reports a git failure as a warning and nothing else', async () => {

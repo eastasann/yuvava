@@ -35,8 +35,10 @@ for why it is built the way it is.
 
 1. Install the extension (`npm run package` produces `navigator.vsix`;
    install it with `code --install-extension navigator.vsix`).
-2. Run `Navigator: Set Anthropic API Key` — the key is kept in VS Code secret
-   storage. `ANTHROPIC_API_KEY` from the environment is used as a fallback.
+2. Pick a provider with `navigator.provider` (`anthropic`, the default, or
+   `openai`), then run `Navigator: Set API Key` — the key is kept in VS Code
+   secret storage, one per provider. `ANTHROPIC_API_KEY` / `OPENAI_API_KEY`
+   from the environment are used as fallbacks.
 3. Make some changes, then run `Navigator: Review Current Changes`.
 
 ## Commands
@@ -45,20 +47,30 @@ for why it is built the way it is.
 | --- | --- |
 | `Navigator: Review Current Changes` | Reviews the working tree against `navigator.diffBase`. |
 | `Navigator: Clear Observations` | Removes Navigator's diagnostics. |
-| `Navigator: Set Anthropic API Key` | Stores the API key in secret storage. |
-| `Navigator: Clear Anthropic API Key` | Removes the stored key. |
+| `Navigator: Set API Key` | Stores the active provider's API key in secret storage. |
+| `Navigator: Clear API Key` | Removes the active provider's stored key. |
 | `Navigator: Show Log` | Opens the Navigator output channel. |
 
 ## Settings
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
-| `navigator.model` | `claude-opus-5` | Model used for review. |
+| `navigator.provider` | `anthropic` | `anthropic` (Claude) or `openai` (GPT / Codex). |
+| `navigator.model` | *(provider default)* | `claude-opus-5` or `gpt-5.1-codex-max` unless set. |
 | `navigator.reviewIntensity` | `normal` | `silent`, `normal` or `strict` (SPEC §15). |
 | `navigator.diffBase` | `HEAD` | Revision the working tree is compared against. |
 | `navigator.includeUntracked` | `true` | Also review new, untracked files. |
 | `navigator.maxDiffBytes` | `200000` | Diffs above this size are not sent. |
 | `navigator.maxObservations` | `20` | Cap on observations per review. |
+
+## Providers
+
+Anthropic and OpenAI are held to the same contract: the same system prompt, the
+same JSON response schema, the same validation, and the same sanitiser. Which
+one reviews changes who is looking over your shoulder — it changes nothing
+about what Navigator is allowed to do with the answer, and
+`test/providerFactory.test.ts` checks that a replacement implementation is
+stripped whichever provider returns it.
 
 ## Development
 
@@ -68,10 +80,12 @@ npm run verify   # lint + typecheck/compile + tests
 npm run package  # build navigator.vsix
 ```
 
+Agents working on this repository should read [AGENTS.md](AGENTS.md) first.
+
 The code is split so the interesting parts are testable outside the editor:
 
-- `src/core/` — diff parsing, prompt, response validation, sanitising,
-  anchoring. No `vscode` import; a lint-enforced boundary.
+- `src/core/` — git, diff parsing, prompt, providers, response validation,
+  sanitising, anchoring. No `vscode` import; a test-enforced boundary.
 - `src/vscode/` — commands, diagnostics, status bar. Thin by design.
 - `test/` — unit tests, including `invariant.test.ts`, which reads Navigator's
   own source to prove it cannot edit yours.

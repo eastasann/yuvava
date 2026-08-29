@@ -7,7 +7,7 @@
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { AnthropicReviewProvider, DEFAULT_MODEL } from '../src/core/anthropicProvider.js';
+import { AnthropicReviewProvider, DEFAULT_ANTHROPIC_MODEL } from '../src/core/anthropicProvider.js';
 import { ReviewUnavailableError } from '../src/core/provider.js';
 
 interface CapturedRequest {
@@ -29,7 +29,7 @@ function messageWith(text: string, stopReason = 'end_turn'): unknown {
     id: 'msg_1',
     type: 'message',
     role: 'assistant',
-    model: DEFAULT_MODEL,
+    model: DEFAULT_ANTHROPIC_MODEL,
     content: [{ type: 'text', text }],
     stop_reason: stopReason,
     stop_sequence: null,
@@ -76,7 +76,7 @@ describe('AnthropicReviewProvider request', () => {
     assert.match(request.url, /\/v1\/messages/);
     assert.equal(request.headers['x-api-key'], 'test-key');
 
-    assert.equal(request.body.model, DEFAULT_MODEL);
+    assert.equal(request.body.model, DEFAULT_ANTHROPIC_MODEL);
     assert.equal(typeof request.body.max_tokens, 'number');
 
     const system = String(request.body.system);
@@ -131,7 +131,7 @@ describe('AnthropicReviewProvider request', () => {
   it('falls back to the default model for a blank setting', async () => {
     const captured: CapturedRequest[] = [];
     await providerReturning(jsonResponse(messageWith('{"issues":[]}')), captured, '   ').review(REQUEST);
-    assert.equal(captured[0].body.model, DEFAULT_MODEL);
+    assert.equal(captured[0].body.model, DEFAULT_ANTHROPIC_MODEL);
   });
 });
 

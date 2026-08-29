@@ -11,7 +11,7 @@ import { buildSystemPrompt, buildUserPrompt } from './prompt.js';
 import { REVIEW_OUTPUT_SCHEMA } from './schema.js';
 import { ReviewUnavailableError, type ReviewProvider, type ReviewRequest, type ReviewResponse } from './provider.js';
 
-export const DEFAULT_MODEL = 'claude-opus-5';
+export const DEFAULT_ANTHROPIC_MODEL = 'claude-opus-5';
 
 /** Reviews are short; the schema keeps them shorter. */
 const MAX_TOKENS = 4096;
@@ -37,7 +37,7 @@ export class AnthropicReviewProvider implements ReviewProvider {
       maxRetries: 0,
       ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
     });
-    this.model = options.model?.trim() || DEFAULT_MODEL;
+    this.model = options.model?.trim() || DEFAULT_ANTHROPIC_MODEL;
   }
 
   async review(request: ReviewRequest): Promise<ReviewResponse> {

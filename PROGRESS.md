@@ -19,8 +19,9 @@ npm run package  # produces navigator.vsix
 - [x] Untracked files reviewed via a synthesised `new file` diff
       (`src/core/untracked.ts`, `src/core/workspaceDiff.ts`) — no `git add -N`.
 - [x] Unified-diff parsing and line-numbered rendering (`src/core/diff.ts`).
-- [x] AI review via the Anthropic Messages API with a JSON output schema
-      (`src/core/anthropicProvider.ts`).
+- [x] AI review with a JSON output schema, via Anthropic (`claude-opus-5`) or
+      OpenAI (`gpt-5.1-codex-max`), selected by `navigator.provider` and built
+      in `src/core/providerFactory.ts`.
 - [x] Structured result parsing and validation (`src/core/schema.ts`).
 - [x] Code-generation sanitiser (`src/core/sanitize.ts`).
 - [x] Anchoring to reviewed hunks (`src/core/anchor.ts`).
@@ -28,10 +29,10 @@ npm run package  # produces navigator.vsix
 - [x] Silence when there is nothing to report.
 - [x] Failure paths: no git, bad base revision, no API key, no workspace,
       oversized diff, malformed response, model refusal, empty response.
-- [x] Tests: 161 across diff, schema, sanitize, anchor, range, git (stubbed and
-      real), untracked-file synthesis, workspace diff composition, the Anthropic
-      request wire shape, the review pipeline, extension wiring, and the
-      product invariant.
+- [x] Tests: 187 across diff, schema, sanitize, anchor, range, git (stubbed and
+      real), untracked-file synthesis, workspace diff composition, both
+      providers' wire shapes, provider selection, the review pipeline,
+      extension wiring, and the product invariant.
 - [x] `npm run package` produces a working `.vsix`.
 
 ## Done — Optional (SPEC §19)
@@ -49,6 +50,12 @@ npm run package  # produces navigator.vsix
       after the manual flow has proven useful.
 - [ ] Review history.
 
+## Agent instructions
+
+`AGENTS.md` is the entry point for any coding agent (Codex, Claude Code, …);
+`CLAUDE.md` imports it. Keep the invariant section there in step with
+`test/invariant.test.ts`.
+
 ## Invariant
 
 `test/invariant.test.ts` is the guard for SPEC §16. It reads Navigator's own
@@ -59,11 +66,11 @@ invariant is the product.
 
 ## Known gaps
 
-- No live API call has ever been made from this repository (no key is available
-  in the development environment). `test/anthropicProvider.test.ts` pins the
-  exact wire request by injecting the SDK's `fetch`, so the request shape,
-  headers and every response branch are verified — but the server's acceptance
-  of that request is not. Confirm once against a real key.
+- No live API call has ever been made from this repository, for either provider
+  (no keys are available in the development environment). The provider tests
+  pin the exact wire request by injecting each SDK's `fetch`, so request shape,
+  headers and every response branch are verified — but the servers' acceptance
+  of those requests is not. Confirm each once against a real key.
 - No end-to-end test inside a real extension host. `test/extension.test.ts`
   activates the extension against a fake `vscode` module instead, which covers
   command registration, the failure paths and diagnostic conversion but not

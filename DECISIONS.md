@@ -128,6 +128,50 @@ the environment is the fallback.
 Reason:
 A settings-backed key ends up in synced or committed JSON.
 
+## Decision: The provider is swappable; the guarantees are not
+
+`navigator.provider` selects Anthropic (default) or OpenAI, built by
+`src/core/providerFactory.ts` behind the existing `ReviewProvider` interface.
+Both send the same system prompt and the same JSON schema, and both responses
+go through the same validation, anchoring and sanitising.
+
+Reason:
+Which model reads the diff is a preference, and people have accounts with one
+or the other. What Navigator is allowed to do with the answer is not a
+preference, so it lives entirely on Navigator's side of the seam rather than in
+either provider.
+
+Consequences:
+- The response schema now marks every field `required`, with `endLine`
+  repeating `line` and `symbol` allowed to be empty, because OpenAI strict mode
+  requires `required` to list every property. One schema serves both; the
+  validator already treats those empty values as absent.
+- API keys are stored per provider (`navigator.anthropicApiKey` /
+  `navigator.openaiApiKey`), with `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` as
+  environment fallbacks. Selecting a provider never reaches for the other's key.
+- `test/providerFactory.test.ts` runs the same hostile review — an observation
+  with a fenced replacement implementation — through both providers and asserts
+  the code is stripped either way.
+
+## Decision: OpenAI reviews go through the Responses API
+
+`client.responses.create` with `text.format` as a strict `json_schema`, and
+`gpt-5.1-codex-max` as the default model.
+
+Reason:
+The Responses API is the current surface and the only one that serves the
+Codex-family models; a Codex model is the right default for a job that is
+entirely diff reading. `status === 'incomplete'` is treated as a failed review
+rather than parsed, so a truncated response never becomes half a review.
+
+## Decision: Agent instructions live in AGENTS.md, with CLAUDE.md importing it
+
+Reason:
+Codex reads `AGENTS.md`, Claude Code reads `CLAUDE.md`. Two files with the same
+content drift apart, and the file that drifts is the one that tells an agent
+not to break the product invariant. `CLAUDE.md` is three lines and an
+`@AGENTS.md` import.
+
 ## Decision: `claude-opus-5`, on the beta messages endpoint
 
 `src/core/anthropicProvider.ts` calls `client.beta.messages.create` with
@@ -142,9 +186,15 @@ changes nothing in the workspace.
 
 ## Decision: No bundler
 
-`vsce package` ships the compiled `out/` plus production dependencies (~2.7 MB).
+`vsce package` ships the compiled `out/` plus production dependencies — ~6.9 MB
+now that both provider SDKs are included.
 
 Reason:
 LOOP.md §6.6. A bundler is a build-time abstraction the MVP does not need, and
-the packaged size is unremarkable for an extension. Revisit if startup cost
-ever shows up.
+the packaged size is unremarkable for an extension.
+
+When to revisit:
+Carrying two SDKs so one can be used is the obvious waste. Bundling with
+esbuild, or `await import()`ing only the selected provider, are both easy
+levers — worth pulling if download size or activation time ever matters, and
+not before.
