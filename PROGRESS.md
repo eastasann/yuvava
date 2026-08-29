@@ -26,8 +26,9 @@ npm run package  # produces navigator.vsix
 - [x] Silence when there is nothing to report.
 - [x] Failure paths: no git, bad base revision, no API key, no workspace,
       oversized diff, malformed response, model refusal, empty response.
-- [x] Tests: 119 across diff, schema, sanitize, anchor, range, git, review
-      pipeline, extension wiring, and the product invariant.
+- [x] Tests: 140 across diff, schema, sanitize, anchor, range, git (stubbed and
+      real), the Anthropic request wire shape, the review pipeline, extension
+      wiring, and the product invariant.
 - [x] `npm run package` produces a working `.vsix`.
 
 ## Done — Optional (SPEC §19)
@@ -55,9 +56,12 @@ invariant is the product.
 
 ## Known gaps
 
-- The Anthropic provider itself is not covered by an automated test; doing so
-  would mean either a network call or mocking the SDK's HTTP layer. Everything
-  downstream of it is tested through the `ReviewProvider` interface, and the
-  provider is deliberately thin (build request, check `stop_reason`, join text).
+- No live API call has ever been made from this repository (no key is available
+  in the development environment). `test/anthropicProvider.test.ts` pins the
+  exact wire request by injecting the SDK's `fetch`, so the request shape,
+  headers and every response branch are verified — but the server's acceptance
+  of that request is not. Confirm once against a real key.
 - No end-to-end test inside a real extension host. `test/extension.test.ts`
-  activates the extension against a fake `vscode` module instead.
+  activates the extension against a fake `vscode` module instead, which covers
+  command registration, the failure paths and diagnostic conversion but not
+  VS Code's own rendering.

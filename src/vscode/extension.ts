@@ -131,12 +131,12 @@ async function reviewCurrentChanges(
 
   reviewInFlight = true;
   statusBar.setReviewing();
+  const abort = new AbortController();
 
   try {
     await vscode.window.withProgress(
       { location: vscode.ProgressLocation.Window, title: 'Navigator: reviewing changes', cancellable: true },
       async (_progress, token) => {
-        const abort = new AbortController();
         token.onCancellationRequested(() => abort.abort());
 
         const runOptions = { cwd: folder.uri.fsPath, signal: abort.signal };
@@ -148,6 +148,7 @@ async function reviewCurrentChanges(
           diff = await getWorkingTreeDiff(config.diffBase, { ...runOptions, cwd: repositoryRoot });
         } catch (error) {
           if (error instanceof GitError) {
+            statusBar.setIdle();
             reportUnavailable(error.message, log);
             return;
           }
@@ -178,6 +179,7 @@ async function reviewCurrentChanges(
         }
 
         if (report.status === 'diff-too-large') {
+          statusBar.setIdle();
           reportUnavailable(
             `the diff is larger than navigator.maxDiffBytes (${config.maxDiffBytes} bytes)`,
             log,
@@ -204,6 +206,11 @@ async function reviewCurrentChanges(
     );
   } catch (error) {
     statusBar.setIdle();
+    if (abort.signal.aborted) {
+      // The developer cancelled. That is not a failure worth a notification.
+      log.info('review cancelled');
+      return;
+    }
     if (error instanceof ReviewUnavailableError || error instanceof GitError) {
       reportUnavailable(error.message, log);
     } else {

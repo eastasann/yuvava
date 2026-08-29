@@ -21,6 +21,8 @@ const FALLBACK_BETA = 'server-side-fallback-2026-07-01';
 export interface AnthropicProviderOptions {
   readonly apiKey: string;
   readonly model?: string;
+  /** Custom fetch implementation. Used by tests to pin the request shape. */
+  readonly fetch?: typeof globalThis.fetch;
 }
 
 export class AnthropicReviewProvider implements ReviewProvider {
@@ -28,7 +30,13 @@ export class AnthropicReviewProvider implements ReviewProvider {
   private readonly model: string;
 
   constructor(options: AnthropicProviderOptions) {
-    this.client = new Anthropic({ apiKey: options.apiKey, maxRetries: 1 });
+    this.client = new Anthropic({
+      apiKey: options.apiKey,
+      // A review is a deliberate, user-initiated action: failing fast and
+      // letting the developer run it again beats a command that silently hangs.
+      maxRetries: 0,
+      ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
+    });
     this.model = options.model?.trim() || DEFAULT_MODEL;
   }
 
@@ -69,7 +77,7 @@ export class AnthropicReviewProvider implements ReviewProvider {
   }
 }
 
-function describeApiError(error: unknown): string {
+export function describeApiError(error: unknown): string {
   if (error instanceof Anthropic.AuthenticationError) {
     return 'the Anthropic API key was rejected';
   }
