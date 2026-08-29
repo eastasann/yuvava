@@ -71,11 +71,19 @@ describe('looksLikeCode', () => {
     assert.ok(looksLikeCode('  if (!items) {'));
     assert.ok(looksLikeCode('}'));
     assert.ok(looksLikeCode('+  return null;'));
+    assert.ok(looksLikeCode('const total = items.length'));
+    assert.ok(looksLikeCode('if (!items) return'));
+    assert.ok(looksLikeCode('function total(cart)'));
+    assert.ok(looksLikeCode('import { readFile } from "fs"'));
     assert.ok(looksLikeCode('diff --git a/x b/x'));
     assert.ok(looksLikeCode('@@ -1,2 +1,3 @@'));
   });
 
   it('does not mistake prose for code', () => {
+    assert.equal(looksLikeCode('for large inputs this becomes O(n²)'), false);
+    assert.equal(looksLikeCode('class hierarchies here are hard to follow'), false);
+    assert.equal(looksLikeCode('exported helpers are not validated'), false);
+    assert.equal(looksLikeCode('const values are reassigned below'), false);
     assert.equal(looksLikeCode('if the response has no body, items is undefined.'), false);
     assert.equal(looksLikeCode('return values are not checked here.'), false);
     assert.equal(looksLikeCode('The reduce() call assumes a non-empty array.'), false);

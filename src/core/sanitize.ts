@@ -24,8 +24,17 @@ export interface SanitizeResult {
 }
 
 const FENCED_BLOCK = /```[\s\S]*?(?:```|$)/g;
-const CODE_KEYWORD =
-  /^(?:const|let|var|function|class|return|if|else|for|while|switch|try|catch|import|export|def|fn|pub|public|private|async|await)\b/;
+/**
+ * Lines that are syntactically code even without a trailing `;` or brace.
+ * Each pattern requires real syntax after the keyword, so prose that merely
+ * begins with "if", "for" or "return" is not mistaken for an implementation.
+ */
+const CODE_SHAPES: readonly RegExp[] = [
+  /^(?:if|for|while|switch|catch)\s*\(/,
+  /^(?:const|let|var)\s+[\w$]+\s*=/,
+  /^(?:function|class|def|fn)\s+[\w$]+\s*[(<]/,
+  /^(?:import|export)\s+[\w{*]/,
+];
 
 /**
  * Heuristic: does this line read like a statement rather than a sentence?
@@ -46,11 +55,13 @@ export function looksLikeCode(line: string): boolean {
   if (body.length === 0) {
     return false;
   }
-  const endsLikeProse = /[.!?。！？]$/.test(body);
   if (/[;{}]$/.test(body)) {
     return true;
   }
-  return CODE_KEYWORD.test(body) && /[=(){}[\]]/.test(body) && !endsLikeProse;
+  if (/[.!?。！？]$/.test(body)) {
+    return false;
+  }
+  return CODE_SHAPES.some((shape) => shape.test(body));
 }
 
 export function sanitizeMessage(raw: string): SanitizeResult {
