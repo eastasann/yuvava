@@ -109,9 +109,21 @@ npm test          # node:test
 npm run package   # builds yuvava.vsix
 ```
 
-`npm run install:local` also exists — it verifies, builds and installs into a
-real VS Code via the `code` CLI. That is the human operating path; it is not
-runnable here and is not part of the gate.
+Three more exist, and **none of them runs in a cloud container**. They are the
+human operating path, and none is part of the gate:
+
+| Command | Needs | What it settles |
+| --- | --- | --- |
+| `npm run install:local` | a real VS Code and the `code` CLI | verifies, builds and installs the `.vsix` |
+| `npm run smoke` | an API key | one real request down each of review, guidance, recall and the MDN index |
+| `npm run eval` | an API key | review quality on the synthetic set, four numbers per intensity |
+| `npm run test:host` | a real VS Code (a display, or `xvfb-run`) | activation, `main` resolution, the palette, diagnostics, the hover provider |
+
+`npm run smoke` and `npm run test:host` exist because a green gate here does
+not mean Navigator works: every provider test injects the SDK's `fetch`, and
+the extension tests activate against a fake `vscode` module. If you have a key
+or a display, run them — that is the part this environment cannot do, and the
+part the repository most needs.
 
 **`git` must be on `PATH` to verify.** `test/gitIntegration.test.ts` is the only
 coverage of the real `execFile` path and of git's actual diff output, and it
