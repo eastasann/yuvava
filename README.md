@@ -175,12 +175,29 @@ npm run package        # build yuvava.vsix
 npm run install:local  # verify, build, and install into VS Code
 ```
 
+The gate needs `git` on `PATH`: the one suite that drives real git fails rather
+than skips without it. Three more commands are deliberately outside the gate,
+because each needs something a container does not have:
+
+```bash
+npm run smoke      # one real request down every path      (needs an API key)
+npm run eval       # review quality on the synthetic set    (needs an API key)
+npm run test:host  # checks inside a real VS Code   (needs a display, or xvfb-run)
+```
+
+`npm run eval` prints four numbers per intensity — miss rate, false-positive
+rate, noise rate, silence correctness — so two prompts can be compared. The
+last two matter most: SPEC §7 is a claim about restraint, and a review that
+finds every bug and also comments on every clean diff has failed it.
+
 Agents working on this repository should read [AGENTS.md](AGENTS.md) first.
 
 The code is split so the interesting parts are testable outside the editor:
 
 - `src/core/` — git, diff parsing, prompt, providers, response validation,
   sanitising, anchoring. No `vscode` import; a test-enforced boundary.
-- `src/vscode/` — commands, diagnostics, status bar. Thin by design.
+- `src/vscode/` — commands, diagnostics, status bar, hover. Thin by design.
 - `test/` — unit tests, including `invariant.test.ts`, which reads Navigator's
-  own source to prove it cannot edit yours.
+  own source to prove it cannot edit yours, and `test/eval/`, the synthetic
+  set used to measure review quality.
+- `scripts/` — the three commands above. None runs in CI or a container.
