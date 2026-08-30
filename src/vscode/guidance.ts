@@ -12,6 +12,7 @@
 
 import * as vscode from 'vscode';
 import { runGuidance } from '../core/guidance.js';
+import { MdnDocsIndex, resolveDocsLinks, type DocsLink } from '../core/docsIndex.js';
 import { createReviewProvider } from '../core/providerFactory.js';
 import { ReviewUnavailableError } from '../core/provider.js';
 import { searchUrl } from '../core/search.js';
@@ -33,6 +34,8 @@ export const MORE_SPECIFIC = 'More specific';
  */
 export interface GuidancePick extends vscode.QuickPickItem {
   readonly search?: string;
+  /** Set when the term resolved to a real page in the index (SPEC §10.1). */
+  readonly url?: string;
   readonly more?: true;
 }
 
@@ -44,7 +47,11 @@ export interface GuidancePick extends vscode.QuickPickItem {
  * keeping `Hint -> Human thinks -> Human solves` intact, so nothing here
  * advances on its own.
  */
-export function buildGuidancePicks(report: GuidanceReport, revealed = 0): GuidancePick[] {
+export function buildGuidancePicks(
+  report: GuidanceReport,
+  revealed = 0,
+  links: ReadonlyMap<string, DocsLink> = new Map(),
+): GuidancePick[] {
   const picks: GuidancePick[] = report.topics.map((topic) => ({
     label: topic.name,
     ...(topic.note === undefined ? {} : { description: topic.note }),
@@ -61,7 +68,15 @@ export function buildGuidancePicks(report: GuidanceReport, revealed = 0): Guidan
   if (report.searches.length > 0) {
     picks.push({ label: 'Search', kind: vscode.QuickPickItemKind.Separator });
     for (const term of report.searches) {
-      picks.push({ label: term, search: term });
+      // The term is shown either way (SPEC §10.3): if it resolved, choosing it
+      // opens the page; if not, it opens a web search. Nothing is hidden
+      // because Navigator could not find a link for it.
+      const link = links.get(term);
+      picks.push(
+        link === undefined
+          ? { label: term, search: term }
+          : { label: term, description: link.title, search: term, url: link.url },
+      );
     }
   }
 
@@ -139,9 +154,11 @@ export async function whereShouldILook(
     return;
   }
 
+  const links = await resolveDocsLinks(new MdnDocsIndex(), report.searches, { signal: abort.signal });
+
   let revealed = 0;
   for (;;) {
-    const chosen = await vscode.window.showQuickPick(buildGuidancePicks(report, revealed), {
+    const chosen = await vscode.window.showQuickPick(buildGuidancePicks(report, revealed, links), {
       title: question.trim(),
       placeHolder: 'Where to look. Escape closes this and leaves nothing behind.',
     });
@@ -150,7 +167,7 @@ export async function whereShouldILook(
       return;
     }
     if (chosen.search !== undefined) {
-      await vscode.env.openExternal(vscode.Uri.parse(searchUrl(chosen.search)));
+      await vscode.env.openExternal(vscode.Uri.parse(chosen.url ?? searchUrl(chosen.search)));
       return;
     }
     if (chosen.more !== true) {

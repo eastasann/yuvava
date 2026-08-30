@@ -22,6 +22,8 @@ for why it is built the way it is.
   what it involves — the APIs, the concepts, the decisions — plus the words to
   search for. It does not answer the question. If that is not enough, **More
   specific** opens one more level of hint at a time, and never on its own.
+  Search terms that MDN recognises become links; the rest stay terms you can
+  search yourself. Navigator never shows a link a model wrote.
 - `Navigator: What Was It Called?` gives back a name you have forgotten but
   would recognise. The name comes on its own; the signature, the one-line
   meaning and the documentation are each one more step you have to take.

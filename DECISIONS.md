@@ -539,3 +539,38 @@ The hover needs to answer "which observation is this line" without re-running
 anything. Nothing is written to disk, and nothing accumulates — this is not
 review history (which stays unbuilt; see its own entry), and it should not
 become the place someone adds it.
+
+## Decision: The documentation index is MDN's search API, and only that
+
+`src/core/docsIndex.ts` resolves a search term through
+`https://developer.mozilla.org/api/v1/search`, takes the first result's title
+and `mdn_url`, and shows nothing when there is no match. This is the decision
+issue #8 left open.
+
+Alternatives considered:
+- **A general search API** (Brave, Google CSE): covers everything, and costs an
+  API key, a setting, a quota and a second failure mode — for a tool with one
+  user, whose questions are mostly about the web platform anyway.
+- **Scraping**: breaks, silently, at someone else's convenience.
+- **A bundled table of links**: goes stale in the repository, which is worse
+  than going stale on a server.
+
+Why MDN:
+Free, no key, authoritative for what it covers, and its coverage — the web
+platform and JavaScript — is most of what "what is this called" is about. What
+it does not cover degrades to a search term, which is what SPEC §10.3 wanted
+shown regardless.
+
+Guards:
+- `mdnDocumentUrl` refuses anything that is not an MDN document path, so a
+  changed or hostile response cannot become a link somewhere else.
+- 2-second timeout, resolved in parallel, at most three links (SPEC §10.2).
+  Every failure — offline, proxied, rate-limited, malformed — is silent and
+  costs nothing: the term is still there.
+- MDN's `summary` field is available and deliberately unused. Summarising the
+  page is what SPEC §10.3 asks Navigator not to do, and the test says so.
+
+When to revisit:
+When a real session produces a run of terms MDN cannot resolve, and the pattern
+in them says which index would have. Not before — that is the measurement, and
+guessing at it is how the setting gets added for nothing.

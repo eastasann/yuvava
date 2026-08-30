@@ -13,6 +13,7 @@
 import * as vscode from 'vscode';
 import { runRecall, type RecallReport } from '../core/recall.js';
 import { recallStages, type RecallCandidate } from '../core/recallSchema.js';
+import { MdnDocsIndex, resolveDocsLinks, type DocsLink } from '../core/docsIndex.js';
 import { createReviewProvider } from '../core/providerFactory.js';
 import { ReviewUnavailableError } from '../core/provider.js';
 import { searchUrl } from '../core/search.js';
@@ -27,6 +28,8 @@ let recallInFlight = false;
 
 interface RecallPick extends vscode.QuickPickItem {
   readonly search?: string;
+  /** Set when the term resolved to a real page in the index (SPEC §10.1). */
+  readonly url?: string;
   readonly more?: true;
 }
 
@@ -41,14 +44,23 @@ export function buildNamePicks(report: RecallReport): RecallPick[] {
  * `revealed` counts rungs climbed above the name; it starts at zero, so the
  * first thing shown is the name alone.
  */
-export function buildCandidatePicks(candidate: RecallCandidate, revealed = 0): RecallPick[] {
+export function buildCandidatePicks(
+  candidate: RecallCandidate,
+  revealed = 0,
+  links: ReadonlyMap<string, DocsLink> = new Map(),
+): RecallPick[] {
   const stages = recallStages(candidate);
   const picks: RecallPick[] = [];
 
   for (const stage of stages.slice(0, Math.max(0, revealed))) {
     if (stage.kind === 'search') {
       picks.push({ label: 'Documentation', kind: vscode.QuickPickItemKind.Separator });
-      picks.push({ label: stage.text, search: stage.text });
+      const link = links.get(stage.text);
+      picks.push(
+        link === undefined
+          ? { label: stage.text, search: stage.text }
+          : { label: stage.text, description: link.title, search: stage.text, url: link.url },
+      );
     } else {
       picks.push({ label: stage.text, description: stage.kind });
     }
@@ -138,9 +150,14 @@ export async function whatWasItCalled(
     return;
   }
 
+  const links = await resolveDocsLinks(
+    new MdnDocsIndex(),
+    candidate.search === undefined ? [] : [candidate.search],
+  );
+
   let revealed = 0;
   for (;;) {
-    const picks = buildCandidatePicks(candidate, revealed);
+    const picks = buildCandidatePicks(candidate, revealed, links);
     if (picks.length === 0) {
       return;
     }
@@ -153,7 +170,7 @@ export async function whatWasItCalled(
       return;
     }
     if (chosen.search !== undefined) {
-      await vscode.env.openExternal(vscode.Uri.parse(searchUrl(chosen.search)));
+      await vscode.env.openExternal(vscode.Uri.parse(chosen.url ?? searchUrl(chosen.search)));
       return;
     }
     if (chosen.more !== true) {

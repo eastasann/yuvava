@@ -452,3 +452,51 @@ describe('What Was It Called? (SPEC §9)', () => {
     assert.deepEqual(fake.recorded.warnings, []);
   });
 });
+
+describe('documentation links come from the index (SPEC §10)', () => {
+  const report = {
+    status: 'answered' as const,
+    topics: [{ name: 'AbortSignal' }],
+    searches: ['MDN AbortSignal', 'some framework thing'],
+    hints: [],
+    notes: [],
+  };
+  const links = new Map([
+    [
+      'MDN AbortSignal',
+      {
+        term: 'MDN AbortSignal',
+        title: 'AbortSignal',
+        url: 'https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal',
+      },
+    ],
+  ]);
+
+  it('shows every term, resolved or not', () => {
+    const labels = guidanceModule.buildGuidancePicks(report, 0, links).map((pick) => pick.label);
+    for (const term of report.searches) {
+      assert.ok(labels.includes(term), `${term} was hidden`);
+    }
+  });
+
+  it('attaches a URL only where the index gave one', () => {
+    const picks = guidanceModule.buildGuidancePicks(report, 0, links);
+    const resolved = picks.find((pick) => pick.label === 'MDN AbortSignal');
+    const unresolved = picks.find((pick) => pick.label === 'some framework thing');
+    assert.equal(resolved?.url, 'https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal');
+    assert.equal(resolved?.description, 'AbortSignal');
+    assert.equal(unresolved?.url, undefined);
+    assert.equal(unresolved?.search, 'some framework thing');
+  });
+
+  it('shows no URL at all when the index answered nothing', () => {
+    const picks = guidanceModule.buildGuidancePicks(report);
+    assert.deepEqual(picks.filter((pick) => pick.url !== undefined), []);
+  });
+
+  it('never invents a link for a term the model produced', () => {
+    const withUrlInTerm = { ...report, searches: ['https://example.invalid/made/up'] };
+    const picks = guidanceModule.buildGuidancePicks(withUrlInTerm, 0, links);
+    assert.deepEqual(picks.filter((pick) => pick.url !== undefined), []);
+  });
+});
