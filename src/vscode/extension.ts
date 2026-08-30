@@ -1,10 +1,10 @@
 /**
  * Navigator's editor layer.
  *
- * Everything the extension can do to a workspace happens in this file, and it
- * is deliberately short: read configuration, read a git diff, ask for a review,
- * publish diagnostics. There is no code path here — or anywhere else in the
- * extension — that writes to a user file (SPEC §16).
+ * Activation and the review command. The other commands are a file each, and
+ * all of them are deliberately short: read configuration, read a git diff, ask
+ * a question, publish diagnostics. There is no code path here — or anywhere
+ * else in the extension — that writes to a user file (SPEC §16).
  */
 
 import * as vscode from 'vscode';
@@ -14,8 +14,10 @@ import { collectWorkspaceDiff } from '../core/workspaceDiff.js';
 import { ReviewUnavailableError } from '../core/provider.js';
 import { runReview } from '../core/review.js';
 import type { ProviderKind } from '../core/types.js';
-import { readConfig } from './config.js';
+import { promptForMissingApiKey, resolveApiKey, setApiKey } from './apiKey.js';
+import { currentWorkspaceFolder, readConfig } from './config.js';
 import { publishObservations } from './diagnostics.js';
+import { whereShouldILook } from './guidance.js';
 import { NavigatorStatusBar } from './statusBar.js';
 
 const TRANSIENT_MESSAGE_MS = 4000;
@@ -37,6 +39,9 @@ export function activate(context: vscode.ExtensionContext): void {
       diagnostics.clear();
       statusBar.setIdle();
     }),
+    vscode.commands.registerCommand('navigator.whereToLook', () =>
+      whereShouldILook(context, log, statusBar),
+    ),
     vscode.commands.registerCommand('navigator.setApiKey', () =>
       setApiKey(context, activeProvider(), log),
     ),
@@ -55,69 +60,10 @@ export function deactivate(): void {
   // Diagnostics, the log channel and the status bar are disposed via subscriptions.
 }
 
-function currentWorkspaceFolder(): vscode.WorkspaceFolder | undefined {
-  const activeUri = vscode.window.activeTextEditor?.document.uri;
-  if (activeUri !== undefined) {
-    const folder = vscode.workspace.getWorkspaceFolder(activeUri);
-    if (folder !== undefined) {
-      return folder;
-    }
-  }
-  return vscode.workspace.workspaceFolders?.[0];
-}
-
 /** The configured provider, for commands that run outside a review. */
 function activeProvider(): ProviderKind {
   const folder = currentWorkspaceFolder();
   return readConfig(folder?.uri).provider;
-}
-
-async function resolveApiKey(
-  context: vscode.ExtensionContext,
-  kind: ProviderKind,
-): Promise<string | undefined> {
-  const profile = providerProfile(kind);
-  const stored = await context.secrets.get(profile.secretKey);
-  if (stored !== undefined && stored.trim().length > 0) {
-    return stored.trim();
-  }
-  const fromEnv = process.env[profile.apiKeyEnvVar];
-  return fromEnv !== undefined && fromEnv.trim().length > 0 ? fromEnv.trim() : undefined;
-}
-
-async function setApiKey(
-  context: vscode.ExtensionContext,
-  kind: ProviderKind,
-  log: vscode.LogOutputChannel,
-): Promise<void> {
-  const profile = providerProfile(kind);
-  const key = await vscode.window.showInputBox({
-    title: `Navigator: ${profile.displayName} API key`,
-    prompt: 'Stored in VS Code secret storage. Leave empty to cancel.',
-    password: true,
-    ignoreFocusOut: true,
-  });
-  if (key === undefined || key.trim().length === 0) {
-    return;
-  }
-  await context.secrets.store(profile.secretKey, key.trim());
-  log.info(`${profile.displayName} API key stored in secret storage`);
-  void vscode.window.showInformationMessage(`Navigator: ${profile.displayName} API key saved.`);
-}
-
-async function promptForMissingApiKey(
-  context: vscode.ExtensionContext,
-  kind: ProviderKind,
-  log: vscode.LogOutputChannel,
-): Promise<void> {
-  const profile = providerProfile(kind);
-  const choice = await vscode.window.showWarningMessage(
-    `Navigator: no ${profile.displayName} API key configured (or ${profile.apiKeyEnvVar} in the environment).`,
-    'Set API Key',
-  );
-  if (choice === 'Set API Key') {
-    await setApiKey(context, kind, log);
-  }
 }
 
 function reportUnavailable(reason: string, log: vscode.LogOutputChannel): void {

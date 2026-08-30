@@ -14,8 +14,17 @@
 
 import OpenAI from 'openai';
 import { buildSystemPrompt, buildUserPrompt } from './prompt.js';
+import { buildGuidanceSystemPrompt, buildGuidanceUserPrompt } from './guidancePrompt.js';
 import { REVIEW_OUTPUT_SCHEMA } from './schema.js';
-import { ReviewUnavailableError, type ReviewProvider, type ReviewRequest, type ReviewResponse } from './provider.js';
+import { GUIDANCE_OUTPUT_SCHEMA } from './guidanceSchema.js';
+import {
+  ReviewUnavailableError,
+  type GuidanceProvider,
+  type GuidanceRequest,
+  type ProviderResponse,
+  type ReviewProvider,
+  type ReviewRequest,
+} from './provider.js';
 
 /** Codex-family model, chosen because the whole job is reading diffs. */
 export const DEFAULT_OPENAI_MODEL = 'gpt-5.1-codex-max';
@@ -23,7 +32,18 @@ export const DEFAULT_OPENAI_MODEL = 'gpt-5.1-codex-max';
 /** Reasoning models spend tokens before they answer; leave room for both. */
 const MAX_OUTPUT_TOKENS = 8192;
 
-const SCHEMA_NAME = 'navigator_review';
+const REVIEW_SCHEMA_NAME = 'navigator_review';
+const GUIDANCE_SCHEMA_NAME = 'navigator_guidance';
+
+/** One job the model can be asked to do: its prompts, schema and wording. */
+interface Job {
+  readonly system: string;
+  readonly user: string;
+  readonly schema: object;
+  readonly schemaName: string;
+  /** Completes "the model declined to ...". */
+  readonly declined: string;
+}
 
 export interface OpenAIProviderOptions {
   readonly apiKey: string;
@@ -37,7 +57,7 @@ export interface OpenAIProviderOptions {
   readonly fetch?: typeof globalThis.fetch;
 }
 
-export class OpenAIReviewProvider implements ReviewProvider {
+export class OpenAIReviewProvider implements ReviewProvider, GuidanceProvider {
   private readonly client: OpenAI;
   private readonly model: string;
   private readonly compatible: boolean;
@@ -56,30 +76,56 @@ export class OpenAIReviewProvider implements ReviewProvider {
     this.model = options.model?.trim() || DEFAULT_OPENAI_MODEL;
   }
 
-  review(request: ReviewRequest): Promise<ReviewResponse> {
-    return this.compatible ? this.viaChatCompletions(request) : this.viaResponses(request);
+  review(request: ReviewRequest): Promise<ProviderResponse> {
+    return this.run(
+      {
+        system: buildSystemPrompt(request.intensity),
+        user: buildUserPrompt(request.annotatedDiff),
+        schema: REVIEW_OUTPUT_SCHEMA,
+        schemaName: REVIEW_SCHEMA_NAME,
+        declined: 'review this change',
+      },
+      request.signal,
+    );
+  }
+
+  guide(request: GuidanceRequest): Promise<ProviderResponse> {
+    return this.run(
+      {
+        system: buildGuidanceSystemPrompt(),
+        user: buildGuidanceUserPrompt(request.question) + (request.context ?? ''),
+        schema: GUIDANCE_OUTPUT_SCHEMA,
+        schemaName: GUIDANCE_SCHEMA_NAME,
+        declined: 'answer',
+      },
+      request.signal,
+    );
+  }
+
+  private run(job: Job, signal: AbortSignal | undefined): Promise<ProviderResponse> {
+    return this.compatible ? this.viaChatCompletions(job, signal) : this.viaResponses(job, signal);
   }
 
   /** OpenAI proper: the Responses API, where the Codex models live. */
-  private async viaResponses(request: ReviewRequest): Promise<ReviewResponse> {
+  private async viaResponses(job: Job, signal: AbortSignal | undefined): Promise<ProviderResponse> {
     let response;
     try {
       response = await this.client.responses.create(
         {
           model: this.model,
-          instructions: buildSystemPrompt(request.intensity),
-          input: buildUserPrompt(request.annotatedDiff),
+          instructions: job.system,
+          input: job.user,
           max_output_tokens: MAX_OUTPUT_TOKENS,
           text: {
             format: {
               type: 'json_schema',
-              name: SCHEMA_NAME,
-              schema: REVIEW_OUTPUT_SCHEMA as unknown as Record<string, unknown>,
+              name: job.schemaName,
+              schema: job.schema as Record<string, unknown>,
               strict: true,
             },
           },
         },
-        { signal: request.signal },
+        { signal },
       );
     } catch (error) {
       throw new ReviewUnavailableError(describeOpenAIError(error), { cause: error });
@@ -92,7 +138,9 @@ export class OpenAIReviewProvider implements ReviewProvider {
 
     const text = response.output_text.trim();
     if (text.length === 0) {
-      throw new ReviewUnavailableError(findResponsesRefusal(response) ?? 'the model returned an empty response');
+      throw new ReviewUnavailableError(
+        findResponsesRefusal(response, job.declined) ?? 'the model returned an empty response',
+      );
     }
     return { text };
   }
@@ -105,16 +153,16 @@ export class OpenAIReviewProvider implements ReviewProvider {
    * same way either way — `parseReviewResponse` already tolerates JSON that
    * arrives wrapped in prose or a fence.
    */
-  private async viaChatCompletions(request: ReviewRequest): Promise<ReviewResponse> {
+  private async viaChatCompletions(job: Job, signal: AbortSignal | undefined): Promise<ProviderResponse> {
     const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-      { role: 'system', content: buildSystemPrompt(request.intensity) },
-      { role: 'user', content: buildUserPrompt(request.annotatedDiff) },
+      { role: 'system', content: job.system },
+      { role: 'user', content: job.user },
     ];
     const warnings: string[] = [];
 
     let completion;
     try {
-      completion = await this.createCompletion(messages, request.signal, true);
+      completion = await this.createCompletion(job, messages, signal, true);
     } catch (error) {
       if (!isStructuredOutputRejection(error)) {
         throw new ReviewUnavailableError(describeOpenAIError(error), { cause: error });
@@ -123,7 +171,7 @@ export class OpenAIReviewProvider implements ReviewProvider {
         'the endpoint rejected the JSON schema; retried without it and validated the answer locally',
       );
       try {
-        completion = await this.createCompletion(messages, request.signal, false);
+        completion = await this.createCompletion(job, messages, signal, false);
       } catch (retryError) {
         throw new ReviewUnavailableError(describeOpenAIError(retryError), { cause: retryError });
       }
@@ -138,7 +186,7 @@ export class OpenAIReviewProvider implements ReviewProvider {
     }
     if (typeof choice.message.refusal === 'string' && choice.message.refusal.length > 0) {
       throw new ReviewUnavailableError(
-        `the model declined to review this change (${choice.message.refusal})`,
+        `the model declined to ${job.declined} (${choice.message.refusal})`,
       );
     }
 
@@ -150,6 +198,7 @@ export class OpenAIReviewProvider implements ReviewProvider {
   }
 
   private createCompletion(
+    job: Job,
     messages: OpenAI.Chat.ChatCompletionMessageParam[],
     signal: AbortSignal | undefined,
     withSchema: boolean,
@@ -164,8 +213,8 @@ export class OpenAIReviewProvider implements ReviewProvider {
               response_format: {
                 type: 'json_schema' as const,
                 json_schema: {
-                  name: SCHEMA_NAME,
-                  schema: REVIEW_OUTPUT_SCHEMA,
+                  name: job.schemaName,
+                  schema: job.schema as Record<string, unknown>,
                   strict: true,
                 },
               },
@@ -189,14 +238,14 @@ export function isStructuredOutputRejection(error: unknown): boolean {
 }
 
 /** Surfaces a content refusal as a reason rather than an empty response. */
-function findResponsesRefusal(response: OpenAI.Responses.Response): string | undefined {
+function findResponsesRefusal(response: OpenAI.Responses.Response, declined: string): string | undefined {
   for (const item of response.output) {
     if (item.type !== 'message') {
       continue;
     }
     for (const content of item.content) {
       if (content.type === 'refusal') {
-        return `the model declined to review this change (${content.refusal})`;
+        return `the model declined to ${declined} (${content.refusal})`;
       }
     }
   }

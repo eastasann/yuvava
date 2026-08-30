@@ -29,6 +29,11 @@
         "category": "Navigator"
       },
       {
+        "command": "navigator.whereToLook",
+        "title": "Where Should I Look?",
+        "category": "Navigator"
+      },
+      {
         "command": "navigator.setApiKey",
         "title": "Set API Key",
         "category": "Navigator"

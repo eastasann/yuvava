@@ -15,6 +15,13 @@ export interface Recorded {
   workspaceFolders: Array<{ uri: { fsPath: string }; name: string; index: number }> | undefined;
   secrets: Map<string, string>;
   nextWarningChoice: string | undefined;
+  /** Answers queued for `showInputBox`, consumed in order. */
+  inputBoxAnswers: Array<string | undefined>;
+  /** Every set of items `showQuickPick` was given, in order. */
+  quickPicks: unknown[][];
+  /** Labels to choose from successive `showQuickPick` calls. */
+  quickPickChoices: Array<string | undefined>;
+  openedExternal: string[];
 }
 
 export const recorded: Recorded = {
@@ -28,6 +35,10 @@ export const recorded: Recorded = {
   workspaceFolders: undefined,
   secrets: new Map(),
   nextWarningChoice: undefined,
+  inputBoxAnswers: [],
+  quickPicks: [],
+  quickPickChoices: [],
+  openedExternal: [],
 };
 
 export function reset(): void {
@@ -41,12 +52,19 @@ export function reset(): void {
   recorded.workspaceFolders = undefined;
   recorded.secrets = new Map();
   recorded.nextWarningChoice = undefined;
+  recorded.inputBoxAnswers.length = 0;
+  recorded.quickPicks.length = 0;
+  recorded.quickPickChoices.length = 0;
+  recorded.openedExternal.length = 0;
 }
 
 export class Uri {
   private constructor(readonly fsPath: string) {}
   static file(fsPath: string): Uri {
     return new Uri(fsPath);
+  }
+  static parse(value: string): Uri {
+    return new Uri(value);
   }
   toString(): string {
     return this.fsPath;
@@ -79,6 +97,7 @@ export class Diagnostic {
 }
 
 export const StatusBarAlignment = { Left: 1, Right: 2 } as const;
+export const QuickPickItemKind = { Separator: -1, Default: 0 } as const;
 export const ProgressLocation = { SourceControl: 1, Window: 10, Notification: 15 } as const;
 
 export class DiagnosticCollection {
@@ -151,7 +170,12 @@ export const window = {
     return Promise.resolve(undefined);
   },
   showInputBox(_options?: unknown): Promise<string | undefined> {
-    return Promise.resolve(undefined);
+    return Promise.resolve(recorded.inputBoxAnswers.shift());
+  },
+  showQuickPick<T extends { label: string }>(items: T[], _options?: unknown): Promise<T | undefined> {
+    recorded.quickPicks.push(items);
+    const wanted = recorded.quickPickChoices.shift();
+    return Promise.resolve(wanted === undefined ? undefined : items.find((item) => item.label === wanted));
   },
   setStatusBarMessage(message: string, _timeout?: number) {
     recorded.statusMessages.push(message);
@@ -162,6 +186,13 @@ export const window = {
     task: (progress: unknown, token: { onCancellationRequested: (listener: () => void) => void }) => Promise<T>,
   ): Promise<T> {
     return task({ report: () => undefined }, { onCancellationRequested: () => undefined });
+  },
+};
+
+export const env = {
+  openExternal(uri: Uri): Promise<boolean> {
+    recorded.openedExternal.push(uri.toString());
+    return Promise.resolve(true);
   },
 };
 

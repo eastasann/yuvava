@@ -18,6 +18,9 @@ for why it is built the way it is.
 - `Navigator: Review Current Changes` reviews your working-tree diff, including
   new files git is not tracking yet (`.gitignore` is honoured, and nothing is
   ever staged to make them visible).
+- `Navigator: Where Should I Look?` takes what you are trying to do and names
+  what it involves — the APIs, the concepts, the decisions — plus the words to
+  search for. It does not answer the question.
 - Real problems show up as **diagnostics** in the editor and the Problems panel:
   correctness bugs, missed edge cases, unhandled null/undefined, error handling
   gaps, and — at higher intensity — concurrency, security and performance risks.
@@ -93,6 +96,7 @@ from the VS Code command palette.
 | Command | What it does |
 | --- | --- |
 | `Navigator: Review Current Changes` | Reviews the working tree against `navigator.diffBase`. |
+| `Navigator: Where Should I Look?` | Names what a task involves, and what to search for. Answers nothing. |
 | `Navigator: Clear Observations` | Removes Navigator's diagnostics. |
 | `Navigator: Set API Key` | Stores the active provider's API key in secret storage. |
 | `Navigator: Clear API Key` | Removes the active provider's stored key. |

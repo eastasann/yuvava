@@ -13,6 +13,7 @@ import { after, before, beforeEach, describe, it } from 'node:test';
 import type * as FakeVscode from './fakes/vscode.js';
 import type * as ExtensionModule from '../src/vscode/extension.js';
 import type * as DiagnosticsModule from '../src/vscode/diagnostics.js';
+import type * as GuidanceModule from '../src/vscode/guidance.js';
 
 const FAKE_PATH = require.resolve('./fakes/vscode.js');
 
@@ -40,11 +41,13 @@ after(() => {
 const fake = require('./fakes/vscode.js') as typeof FakeVscode;
 const extension = require('../src/vscode/extension.js') as typeof ExtensionModule;
 const diagnosticsModule = require('../src/vscode/diagnostics.js') as typeof DiagnosticsModule;
+const guidanceModule = require('../src/vscode/guidance.js') as typeof GuidanceModule;
 /* eslint-enable @typescript-eslint/no-require-imports */
 
 const REQUIRED_COMMANDS = [
   'navigator.reviewChanges',
   'navigator.clearObservations',
+  'navigator.whereToLook',
   'navigator.setApiKey',
   'navigator.clearApiKey',
   'navigator.showLog',
@@ -253,5 +256,86 @@ describe('publishObservations', () => {
     ]);
     assert.equal(result.shown, 0);
     assert.match(result.notes[0], /line no longer exists/);
+  });
+});
+
+describe('Where Should I Look?', () => {
+  beforeEach(() => {
+    fake.reset();
+    for (const name of API_KEY_VARS) {
+      delete process.env[name];
+    }
+    extension.activate(fake.makeExtensionContext() as never);
+  });
+
+  after(() => {
+    for (const [name, value] of Object.entries(savedKeys)) {
+      if (value === undefined) {
+        delete process.env[name];
+      } else {
+        process.env[name] = value;
+      }
+    }
+  });
+
+  it('asks nothing and shows nothing when the question is dismissed', async () => {
+    fake.recorded.inputBoxAnswers.push(undefined);
+    await fake.commands.executeCommand('navigator.whereToLook');
+    assert.deepEqual(fake.recorded.quickPicks, []);
+    assert.deepEqual(fake.recorded.warnings, []);
+  });
+
+  it('treats a blank question as no question', async () => {
+    fake.recorded.inputBoxAnswers.push('   ');
+    await fake.commands.executeCommand('navigator.whereToLook');
+    assert.deepEqual(fake.recorded.quickPicks, []);
+  });
+
+  it('stops for a missing API key instead of calling out', async () => {
+    fake.recorded.inputBoxAnswers.push('add a retry to fetch');
+    await fake.commands.executeCommand('navigator.whereToLook');
+    assert.equal(fake.recorded.quickPicks.length, 0);
+    assert.match(fake.recorded.warnings[0], /no Anthropic API key/);
+  });
+});
+
+describe('buildGuidancePicks', () => {
+  it('shows nothing at all when there is nothing to point at', () => {
+    const picks = guidanceModule.buildGuidancePicks({
+      status: 'answered',
+      topics: [],
+      searches: [],
+      notes: [],
+    });
+    assert.deepEqual(picks, []);
+  });
+
+  it('lists the topics, then the searches under their own heading', () => {
+    const picks = guidanceModule.buildGuidancePicks({
+      status: 'answered',
+      topics: [{ name: 'AbortSignal.timeout()', note: 'the deadline' }, { name: '4xx versus 5xx' }],
+      searches: ['MDN AbortSignal'],
+      notes: [],
+    });
+    assert.deepEqual(
+      picks.map((pick) => [pick.label, pick.description, pick.search]),
+      [
+        ['AbortSignal.timeout()', 'the deadline', undefined],
+        ['4xx versus 5xx', undefined, undefined],
+        ['Search', undefined, undefined],
+        ['MDN AbortSignal', undefined, 'MDN AbortSignal'],
+      ],
+    );
+    assert.equal(picks[2].kind, fake.QuickPickItemKind.Separator);
+  });
+
+  it('offers no heading when the model had no search terms', () => {
+    const picks = guidanceModule.buildGuidancePicks({
+      status: 'answered',
+      topics: [{ name: 'backoff' }],
+      searches: [],
+      notes: [],
+    });
+    assert.equal(picks.length, 1);
   });
 });

@@ -310,3 +310,73 @@ Carrying two SDKs so one can be used is the obvious waste. Bundling with
 esbuild, or `await import()`ing only the selected provider, are both easy
 levers — worth pulling if download size or activation time ever matters, and
 not before.
+
+## Decision: The way in is a question box and a QuickPick, not a panel
+
+`Navigator: Where Should I Look?` asks one question in an input box, and shows
+the answer in a QuickPick that Escape closes. Nothing is persisted, and there
+is no thread to continue.
+
+Reason:
+SPEC §8, §9 and §10 all need somewhere for the developer to say what they are
+trying to do, and every obvious surface for that is a chat panel — which SPEC
+§12.3 rejects outright, because "ask the AI" is the relationship the product
+exists to avoid. A QuickPick is the same VS Code primitive as Go to Symbol: it
+appears, it is read, it is gone. The absence of history is the feature.
+
+Consequences:
+- The command is `navigator.whereToLook`. Command ids and titles are checked by
+  `test/invariant.test.ts` against apply/fix/generate/complete/refactor/rewrite/
+  accept/patch/implement, and a new command has to stay clear of all of them.
+- The answer is topics plus search terms, and nothing else. The schema
+  (`src/core/guidanceSchema.ts`) has two fields, neither of which can hold code
+  or a link, and both go through the label sanitiser on the way back.
+- Guidance needs no git and no workspace folder, so unlike the review command it
+  runs with a folder-less window.
+
+## Decision: Navigator never displays a URL a model produced
+
+Model output is stripped of URLs in `sanitizeLabel`, and the guidance schema has
+no link field. Links, when they exist at all, come from an index.
+
+Reason:
+Models emit plausible URLs that 404 at a meaningful rate, and section anchors
+are worse — documentation gets reorganised after the training cut-off. The
+guarantee worth having is "it appeared as a link, so it exists". One invented
+link destroys that for every real one.
+
+Consequence:
+Search *terms* are always shown, resolved or not, so the developer can always
+run the search themselves (SPEC §10.3). A term that could not be turned into a
+link is still useful; a link that does not resolve is worse than nothing.
+
+## Decision: A search term opens a plain web search, on DuckDuckGo
+
+`src/core/search.ts`, one function.
+
+Reason:
+SPEC §10 wants the developer taken to the documentation rather than read it
+aloud to, and §10.3 wants what they find on the way left intact. A results page
+does both: they see the whole page, not the one link Navigator would have
+picked. DuckDuckGo needs no account and no key, which keeps this from becoming
+another thing to configure.
+
+When to revisit:
+If it ever needs to be configurable, it is one setting and one constant. It is
+not one today because nobody has asked.
+
+## Decision: Navigator's own UI strings stay in English
+
+`SPEC.md`, `LOOP.md` and the issues are written in Japanese; every string the
+extension shows a user is English, including the ones specified in Japanese in
+issue #5 (`Navigator: 調べています` became `Navigator: looking`).
+
+Reason:
+The extension already had a dozen user-facing strings, all English, and the
+owner shipped them. One Japanese string among them is not localisation, it is
+an inconsistency. Doing it properly means `l10n` bundles for every string at
+once, which is a real feature nobody has asked for.
+
+What was actually specified in issue #5 was the *wording discipline* — no
+emoji, no lecturing, name the topic and let the description be short — and that
+is what the QuickPick does.
