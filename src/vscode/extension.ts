@@ -203,6 +203,7 @@ async function reviewCurrentChanges(
             kind: config.provider,
             apiKey,
             model: config.model,
+            baseUrl: config.openaiBaseUrl,
           }),
           signal: abort.signal,
         });
@@ -236,10 +237,14 @@ async function reviewCurrentChanges(
         }
 
         const profile = providerProfile(config.provider);
+        const endpoint =
+          config.provider === 'openai' && config.openaiBaseUrl.length > 0
+            ? ` via ${config.openaiBaseUrl}`
+            : '';
         log.info(
           `reviewed ${report.files.length} file(s) with ${profile.displayName} ` +
-            `${config.model || profile.defaultModel} at intensity "${config.intensity}": ` +
-            `${published.shown} observation(s)`,
+            `${config.model || profile.defaultModel}${endpoint} at intensity ` +
+            `"${config.intensity}": ${published.shown} observation(s)`,
         );
         statusBar.setObservations(published.shown);
 

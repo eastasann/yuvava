@@ -63,6 +63,10 @@ Re-run these before trusting the table if any source file has changed since.
 - Unified-diff parsing and line-numbered rendering — `src/core/diff.ts`.
 - Review via Anthropic (`claude-opus-5`) or OpenAI (`gpt-5.1-codex-max`),
   selected by `navigator.provider` — `src/core/providerFactory.ts`.
+- Any OpenAI-compatible endpoint via `navigator.openaiBaseUrl` (Groq, Cerebras,
+  Ollama, LM Studio, OpenRouter). Setting it switches the request to
+  `/chat/completions`; a rejected JSON schema falls back once to a plain
+  request, noted in the log.
 - Structured output schema plus local validation — `src/core/schema.ts`.
 - Code-generation sanitiser — `src/core/sanitize.ts`.
 - Observations anchored to reviewed hunks — `src/core/anchor.ts`.
@@ -94,21 +98,25 @@ Not started, and each is a deliberate hold rather than an oversight.
   proven useful — and it has not been used against a live API yet (see Known
   problems). Needs debounce/cooldown when it happens.
 - **Review history.** No demand established.
-- **Live confirmation of both providers.** See Known problems; this is the
-  highest-value next step and needs only an API key. It is likely to be
-  answered by the owner's first real use rather than by a development loop.
+- **Live confirmation of any endpoint.** See Known problems; this is the
+  highest-value next step. A free tier (Groq, Cerebras) or a local Ollama now
+  needs only `navigator.openaiBaseUrl`, so it no longer costs anything to try.
+  Likely to be answered by the owner's first real use rather than by a loop.
 - **A `feedback` label does not exist in the repository yet.** The issue
   template names it, which works from the web UI; creating an issue through
   the API needs the label created first.
 
 ## Known problems
 
-- **No live API call has ever been made, for either provider.** No keys exist
-  in the development environment. `test/anthropicProvider.test.ts` and
-  `test/openaiProvider.test.ts` pin the exact wire request by injecting each
-  SDK's `fetch`, so request shape, headers and every response branch are
-  verified — but no server has ever accepted these requests. Treat "the review
-  works end to end" as unproven until each provider is run once with a real key.
+- **No live API call has ever been made, against any endpoint.** No keys exist
+  in the development environment. The provider tests pin the exact wire request
+  by injecting each SDK's `fetch`, so request shape, headers and every response
+  branch are verified — but no server has ever accepted these requests. Treat
+  "the review works end to end" as unproven until it is run once for real.
+  The compatible-endpoint path (`test/openaiCompatible.test.ts`) is the least
+  proven of all: real services vary in how much of the OpenAI API they
+  implement, and the schema fallback is written against that expectation
+  rather than against an observed failure.
 - **No test inside a real extension host.** `test/extension.test.ts` activates
   the extension against a fake `vscode` module (`test/fakes/vscode.ts`). That
   covers command registration, failure paths and diagnostic conversion, but not

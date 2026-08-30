@@ -1,10 +1,15 @@
 /**
- * The OpenAI/Codex review provider.
+ * The OpenAI review provider, and any OpenAI-compatible endpoint.
  *
  * Deliberately the same shape as the Anthropic one: same system prompt, same
  * JSON schema, same `ReviewProvider` contract, no tools. The provider swap
  * changes who reviews, never what Navigator is allowed to do with the answer —
  * every response still goes through the same validation and sanitising.
+ *
+ * Two request paths. OpenAI itself gets the Responses API, which is where the
+ * Codex-family models live. A configured `baseUrl` — Groq, Cerebras, Ollama,
+ * LM Studio — gets Chat Completions, because that is the endpoint those
+ * services actually implement.
  */
 
 import OpenAI from 'openai';
@@ -18,9 +23,16 @@ export const DEFAULT_OPENAI_MODEL = 'gpt-5.1-codex-max';
 /** Reasoning models spend tokens before they answer; leave room for both. */
 const MAX_OUTPUT_TOKENS = 8192;
 
+const SCHEMA_NAME = 'navigator_review';
+
 export interface OpenAIProviderOptions {
   readonly apiKey: string;
   readonly model?: string;
+  /**
+   * An OpenAI-compatible base URL. Empty means OpenAI itself.
+   * Setting it switches the request to Chat Completions.
+   */
+  readonly baseUrl?: string;
   /** Custom fetch implementation. Used by tests to pin the request shape. */
   readonly fetch?: typeof globalThis.fetch;
 }
@@ -28,19 +40,28 @@ export interface OpenAIProviderOptions {
 export class OpenAIReviewProvider implements ReviewProvider {
   private readonly client: OpenAI;
   private readonly model: string;
+  private readonly compatible: boolean;
 
   constructor(options: OpenAIProviderOptions) {
+    const baseUrl = options.baseUrl?.trim();
+    this.compatible = baseUrl !== undefined && baseUrl.length > 0;
     this.client = new OpenAI({
       apiKey: options.apiKey,
       // A review is a deliberate, user-initiated action: failing fast and
       // letting the developer run it again beats a command that silently hangs.
       maxRetries: 0,
+      ...(this.compatible ? { baseURL: baseUrl } : {}),
       ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
     });
     this.model = options.model?.trim() || DEFAULT_OPENAI_MODEL;
   }
 
-  async review(request: ReviewRequest): Promise<ReviewResponse> {
+  review(request: ReviewRequest): Promise<ReviewResponse> {
+    return this.compatible ? this.viaChatCompletions(request) : this.viaResponses(request);
+  }
+
+  /** OpenAI proper: the Responses API, where the Codex models live. */
+  private async viaResponses(request: ReviewRequest): Promise<ReviewResponse> {
     let response;
     try {
       response = await this.client.responses.create(
@@ -52,7 +73,7 @@ export class OpenAIReviewProvider implements ReviewProvider {
           text: {
             format: {
               type: 'json_schema',
-              name: 'navigator_review',
+              name: SCHEMA_NAME,
               schema: REVIEW_OUTPUT_SCHEMA as unknown as Record<string, unknown>,
               strict: true,
             },
@@ -71,18 +92,104 @@ export class OpenAIReviewProvider implements ReviewProvider {
 
     const text = response.output_text.trim();
     if (text.length === 0) {
-      const refusal = findRefusal(response);
+      throw new ReviewUnavailableError(findResponsesRefusal(response) ?? 'the model returned an empty response');
+    }
+    return { text };
+  }
+
+  /**
+   * Any OpenAI-compatible endpoint: Chat Completions.
+   *
+   * Structured output support varies across these services, so a rejected
+   * schema falls back to a plain request once. The response is validated the
+   * same way either way — `parseReviewResponse` already tolerates JSON that
+   * arrives wrapped in prose or a fence.
+   */
+  private async viaChatCompletions(request: ReviewRequest): Promise<ReviewResponse> {
+    const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+      { role: 'system', content: buildSystemPrompt(request.intensity) },
+      { role: 'user', content: buildUserPrompt(request.annotatedDiff) },
+    ];
+    const warnings: string[] = [];
+
+    let completion;
+    try {
+      completion = await this.createCompletion(messages, request.signal, true);
+    } catch (error) {
+      if (!isStructuredOutputRejection(error)) {
+        throw new ReviewUnavailableError(describeOpenAIError(error), { cause: error });
+      }
+      warnings.push(
+        'the endpoint rejected the JSON schema; retried without it and validated the answer locally',
+      );
+      try {
+        completion = await this.createCompletion(messages, request.signal, false);
+      } catch (retryError) {
+        throw new ReviewUnavailableError(describeOpenAIError(retryError), { cause: retryError });
+      }
+    }
+
+    const choice = completion.choices[0];
+    if (choice === undefined) {
+      throw new ReviewUnavailableError('the endpoint returned no choices');
+    }
+    if (choice.finish_reason === 'length') {
+      throw new ReviewUnavailableError('the review was cut short (max_tokens)');
+    }
+    if (typeof choice.message.refusal === 'string' && choice.message.refusal.length > 0) {
       throw new ReviewUnavailableError(
-        refusal ?? 'the model returned an empty response',
+        `the model declined to review this change (${choice.message.refusal})`,
       );
     }
 
-    return { text };
+    const text = (choice.message.content ?? '').trim();
+    if (text.length === 0) {
+      throw new ReviewUnavailableError('the model returned an empty response');
+    }
+    return { text, warnings };
+  }
+
+  private createCompletion(
+    messages: OpenAI.Chat.ChatCompletionMessageParam[],
+    signal: AbortSignal | undefined,
+    withSchema: boolean,
+  ): Promise<OpenAI.Chat.ChatCompletion> {
+    return this.client.chat.completions.create(
+      {
+        model: this.model,
+        messages,
+        max_tokens: MAX_OUTPUT_TOKENS,
+        ...(withSchema
+          ? {
+              response_format: {
+                type: 'json_schema' as const,
+                json_schema: {
+                  name: SCHEMA_NAME,
+                  schema: REVIEW_OUTPUT_SCHEMA,
+                  strict: true,
+                },
+              },
+            }
+          : {}),
+      },
+      { signal },
+    );
   }
 }
 
+/** True when the endpoint refused the request because of the JSON schema. */
+export function isStructuredOutputRejection(error: unknown): boolean {
+  if (!(error instanceof OpenAI.APIError)) {
+    return false;
+  }
+  if (error.status !== 400 && error.status !== 404 && error.status !== 422) {
+    return false;
+  }
+  return /response_format|json_schema|structured output|schema/i.test(error.message);
+}
+
 /** Surfaces a content refusal as a reason rather than an empty response. */
-function findRefusal(response: OpenAI.Responses.Response): string | undefined {
+function findResponsesRefusal(response: OpenAI.Responses.Response): string | undefined {
   for (const item of response.output) {
     if (item.type !== 'message') {
       continue;
@@ -98,19 +205,19 @@ function findRefusal(response: OpenAI.Responses.Response): string | undefined {
 
 export function describeOpenAIError(error: unknown): string {
   if (error instanceof OpenAI.AuthenticationError) {
-    return 'the OpenAI API key was rejected';
+    return 'the API key was rejected';
   }
   if (error instanceof OpenAI.RateLimitError) {
-    return 'rate limited by the OpenAI API';
+    return 'rate limited by the endpoint';
   }
   if (error instanceof OpenAI.APIUserAbortError) {
     return 'the review was cancelled';
   }
   if (error instanceof OpenAI.APIConnectionError) {
-    return 'could not reach the OpenAI API';
+    return 'could not reach the endpoint';
   }
   if (error instanceof OpenAI.APIError) {
-    return `OpenAI API error${error.status === undefined ? '' : ` ${error.status}`}: ${error.message}`;
+    return `API error${error.status === undefined ? '' : ` ${error.status}`}: ${error.message}`;
   }
   if (error instanceof Error) {
     return error.message;

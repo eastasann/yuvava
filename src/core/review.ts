@@ -93,7 +93,7 @@ export async function runReview(options: ReviewOptions): Promise<ReviewReport> {
     maxObservations: options.maxObservations,
   });
 
-  const notes = [...parsed.problems];
+  const notes = [...(response.warnings ?? []), ...parsed.problems];
   for (const drop of outcome.dropped) {
     notes.push(`discarded ${drop.detail}: ${drop.reason}`);
   }

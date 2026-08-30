@@ -65,6 +65,11 @@
           "default": "",
           "markdownDescription": "Model used for review. Leave empty for the provider's default (`claude-opus-5` for Anthropic, `gpt-5.1-codex-max` for OpenAI)."
         },
+        "navigator.openaiBaseUrl": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "An OpenAI-compatible endpoint to use instead of OpenAI itself \u2014 Groq, Cerebras, Ollama, LM Studio, OpenRouter. Setting it switches the request to `/chat/completions`, which is what those services implement.\n\nExamples: `https://api.groq.com/openai/v1`, `http://localhost:11434/v1`.\n\n**Your diff is sent to whatever you point this at.** Free tiers commonly train on the data they receive \u2014 check the provider's terms. Navigator is a personal learning tool and does not manage this for you."
+        },
         "navigator.reviewIntensity": {
           "type": "string",
           "enum": [

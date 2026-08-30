@@ -18,6 +18,12 @@ export interface ReviewRequest {
 export interface ReviewResponse {
   /** Raw model output. Parsed and validated by the core, never trusted. */
   readonly text: string;
+  /**
+   * Anything the provider had to work around to get an answer — a rejected
+   * schema, say. Surfaced in the log so an unfamiliar endpoint can be
+   * diagnosed; never shown as an observation.
+   */
+  readonly warnings?: readonly string[];
 }
 
 export interface ReviewProvider {
