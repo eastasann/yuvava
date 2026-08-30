@@ -19,7 +19,8 @@ capability whose *tests* pass; treat "it works" as unproven until `npm run
 smoke` has been run once by someone with an API key.
 
 Read the open issues before this file (`LOOP.md` §2.2): they are the backlog of
-record, and there are only two.
+record. Six are open — two blocked on this environment, four waiting on
+something the first two produce. Each carries a comment saying which.
 
 ## Verification
 
@@ -100,8 +101,9 @@ Re-run the gate before trusting the table above if any source file has changed.
 
 ## Remaining
 
-**The list of unstarted work is the open GitHub Issues** (`LOOP.md` §2.2).
-There are two, both blocked on this environment rather than on a decision:
+**The list of unstarted work is the open GitHub Issues** (`LOOP.md` §2.2). Six
+are open. Two are blocked on this environment rather than on a decision, and
+they are the ones to act on:
 
 - **#16 — no real API call has ever succeeded.** Missing: an API key
   (`ANTHROPIC_API_KEY` or `OPENAI_API_KEY`; a free Groq or Cerebras key, or a
@@ -114,8 +116,9 @@ There are two, both blocked on this environment rather than on a decision:
   a display or `xvfb-run`. `npm run test:host` is written and loads; this
   container cannot download VS Code at all.
 
-Four more issues stay unstarted for reasons that are *not* blockers to record
-here — they are decisions already made, in `DECISIONS.md`:
+The other four are open but not waiting on a decision. Each one's design
+question has been answered in `DECISIONS.md`; what they are waiting for is what
+the two above would produce:
 
 - **Automatic review (#10) and passive behaviour (#11)** are held by `SPEC.md`
   §13, which permits automatic review only once the manual flow has proven
