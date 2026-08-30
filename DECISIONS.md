@@ -125,6 +125,28 @@ so a file that itself contains diff syntax cannot forge a hunk header.
 Escape hatch:
 `navigator.includeUntracked`, default true.
 
+## Decision: Distribution is a locally built `.vsix`, not the Marketplace
+
+`npm run install:local` verifies, packages, and installs with
+`code --install-extension yuvava.vsix --force`.
+
+Reason:
+Navigator is being operated by the person who develops it. A Marketplace
+listing would add a publisher account, a release process and a review cycle to
+a tool with one user, and none of that makes the reviews better.
+
+Consequences:
+- `publisher` in `package.json` stays the placeholder `navigator`, so the
+  extension id is `navigator.yuvava`. Do not invent a real-looking publisher
+  id; it has to be one actually registered on the Marketplace, and only the
+  owner can create it.
+- Updates are manual by nature — VS Code auto-updates Marketplace extensions
+  only. `--force` is required so a rebuild can replace an identical version
+  number, and the new build is inert until the window is reloaded.
+- The API key lives in secret storage keyed by the extension id, so changing
+  `publisher` or `name` orphans it. That is the migration cost of ever
+  publishing, and it is small: re-run `Navigator: Set API Key`.
+
 ## Decision: The API key lives in VS Code secret storage, not settings
 
 `navigator.setApiKey` stores it via `context.secrets`; `ANTHROPIC_API_KEY` from

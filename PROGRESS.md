@@ -25,7 +25,8 @@ npm run lint      # eslint, zero warnings allowed
 npm run compile   # tsc
 npm test          # node:test
 npm run verify    # lint + compile + tests
-npm run package   # produces navigator.vsix
+npm run package   # produces yuvava.vsix
+npm run install:local  # verify + build + install into VS Code (human path)
 ```
 
 Last executed on this tree (the handoff commit, Markdown-only on top of
@@ -36,7 +37,7 @@ Last executed on this tree (the handoff commit, Markdown-only on top of
 | `npm run lint` | exit 0, no warnings |
 | `npm run compile` | exit 0 |
 | `node --test "out/test/**/*.test.js"` | exit 0 — **187 pass, 0 fail**, 33 suites, ~0.8 s |
-| `npm run package` | exit 0 — `navigator.vsix`, 5509 files, 6.9 MB |
+| `npm run package` | exit 0 — `yuvava.vsix`, 5509 files, 6.9 MB |
 
 `npm run verify` runs lint + compile + tests together and exits 0.
 Re-run these before trusting the table if any source file has changed since.
@@ -124,5 +125,10 @@ Not started, and each is a deliberate hold rather than an oversight.
   may be `""`; the validator treats both as absent. Adding an optional field
   means adding it to `required` with a documented empty value.
 - `src/core/` must never import `vscode`; `test/invariant.test.ts` enforces it.
+- Distribution is a locally built `.vsix` (`npm run install:local`), not the
+  Marketplace — see `DECISIONS.md`. `publisher` is therefore a deliberate
+  placeholder and the extension id is `navigator.yuvava`. Do not "fix" it.
 - No `feedback/` directory exists yet. If real-world usage starts producing
-  observations, that is where they go (`LOOP.md` §2.1).
+  observations, that is where they go (`LOOP.md` §2.1). Now that the extension
+  is being installed and used locally, this is the likeliest source of the
+  next loop's work — particularly for "review quality is unmeasured" above.

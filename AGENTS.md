@@ -78,8 +78,12 @@ npm run verify    # lint + compile + tests — must be green before you commit
 npm run compile   # tsc
 npm run lint      # eslint, zero warnings allowed
 npm test          # node:test
-npm run package   # builds navigator.vsix
+npm run package   # builds yuvava.vsix
 ```
+
+`npm run install:local` also exists — it verifies, builds and installs into a
+real VS Code via the `code` CLI. That is the human operating path; it is not
+runnable here and is not part of the gate.
 
 `npm run verify` is the gate. Do not report work as done without it passing,
 and put the results you actually observed into `PROGRESS.md` before you stop
