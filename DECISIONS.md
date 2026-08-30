@@ -971,3 +971,38 @@ The Responses API path (OpenAI proper) has no such retry. Its limits are much
 higher and nobody has seen this there. Adding it now would be architecture for
 a failure that has not happened (`LOOP.md` §6.6). The same reasoning applies to
 the Anthropic path. If either is ever observed, this is the shape to copy.
+
+## Decision: Every item in a QuickPick leads somewhere, or the list stays open
+
+A topic opens a search for its own name. Anything with nowhere to go — a hint,
+a signature, a one-line concept — brings the list back instead of closing it.
+The decision is one function, `actionFor` in `src/vscode/guidance.ts`, shared by
+all three commands.
+
+Reason:
+Reported from real use, in the first session where a request actually
+succeeded: "the list came up, I clicked something, it closed and nothing
+happened." The item was a topic, and topics were built to be read rather than
+chosen. That premise does not survive contact — a QuickPick item looks
+selectable, clicking it closes the window, and a window that closes having done
+nothing reads as broken.
+
+Worse, topics are the *answer*: `SPEC.md` §10 is about leading the developer to
+where to look, and the place it led to was a dead end at the top of the list.
+
+Why a search rather than nothing:
+A topic is an API, a concept, a decision — exactly the thing someone would go
+and look up. Making it searchable is not a workaround for the click; it is the
+feature finishing what it started.
+
+Why the list reopens rather than closing on text:
+Escape is the way out, and it is in the placeholder. A hint is a sentence with
+nowhere to lead, and re-showing says "that was text" far better than vanishing
+does.
+
+Consequence:
+`actionFor` returns `close | open | reveal | again`, and `again` is this bug
+named. The same four-branch decision had been copy-pasted into three commands,
+so the bug existed three times and would have needed fixing three times.
+`test/clickable.test.ts` asserts that only a hint may be inert, and that no
+input to `actionFor` other than Escape closes the window.
