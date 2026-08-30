@@ -439,3 +439,47 @@ All the levels arrive in one response, so revealing them costs no extra API
 call — the gate is entirely in the UI. That is deliberate: a per-level request
 would make hesitation expensive, and hesitation is the behaviour being
 protected.
+
+## Decision: Recall enforces "no usage examples" by field, not by prompt
+
+`src/core/recallSchema.ts` validates each of SPEC §9's rungs with a different
+sanitiser, chosen for what that rung is allowed to be:
+
+| Field | Sanitiser | Effect |
+| --- | --- | --- |
+| `name` | `sanitizeLabel` | no code, no URL |
+| `signature` | `sanitizeLabel`, then `isSignature` | anything that is not a signature is dropped |
+| `concept` | `sanitizeMessage` (the review one) | no code survives at all |
+| `search` | `sanitizeLabel` | no code, no URL |
+
+Reason:
+SPEC §9's whole point is that the developer retrieves the knowledge from their
+own memory, and a usage example is what stops that from happening — it is
+copyable, so there is nothing left to remember. Asking the model not to write
+one is not a guarantee. A usage example is not signature-shaped, and it does
+not survive the review sanitiser, so there is no field it can arrive in.
+
+Consequence:
+A model that answers `signature` with `const total = items.reduce(...)` loses
+that rung entirely rather than having it shown: the developer sees the name and
+the concept, and the log says a signature was dropped. That is the right
+failure — a missing rung costs one step, a usage example costs the exercise.
+
+## Decision: One provider object, one method per job
+
+`ReviewProvider.review`, `GuidanceProvider.guide`, `RecallProvider.recall`, all
+implemented by the same two classes and composed as `NavigatorProvider`. There
+is no general "ask the model anything" method.
+
+Reason:
+Every prompt and every schema stays on Navigator's side of the seam. A generic
+`complete(system, user, schema)` would be less code and would put the ability to
+ask a model an arbitrary question into `src/vscode/`, one call site away from
+"and now paste the answer into the editor". The seam is a constraint, not just
+an abstraction, so it is shaped by what Navigator is allowed to do rather than
+by what an HTTP client naturally offers.
+
+Consequence:
+A new job is a new method on both providers plus a prompt and a schema — about
+thirty lines. That is the intended cost. Each provider keeps one private
+request path (`ask` / `run`), so the wire format is written once.

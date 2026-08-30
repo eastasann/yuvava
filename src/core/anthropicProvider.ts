@@ -10,13 +10,17 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { buildSystemPrompt, buildUserPrompt } from './prompt.js';
 import { buildGuidanceSystemPrompt, buildGuidanceUserPrompt } from './guidancePrompt.js';
+import { buildRecallSystemPrompt, buildRecallUserPrompt } from './recallPrompt.js';
 import { REVIEW_OUTPUT_SCHEMA } from './schema.js';
 import { GUIDANCE_OUTPUT_SCHEMA } from './guidanceSchema.js';
+import { RECALL_OUTPUT_SCHEMA } from './recallSchema.js';
 import {
   ReviewUnavailableError,
   type GuidanceProvider,
   type GuidanceRequest,
   type ProviderResponse,
+  type RecallProvider,
+  type RecallRequest,
   type ReviewProvider,
   type ReviewRequest,
 } from './provider.js';
@@ -35,7 +39,7 @@ export interface AnthropicProviderOptions {
   readonly fetch?: typeof globalThis.fetch;
 }
 
-export class AnthropicReviewProvider implements ReviewProvider, GuidanceProvider {
+export class AnthropicReviewProvider implements ReviewProvider, GuidanceProvider, RecallProvider {
   private readonly client: Anthropic;
   private readonly model: string;
 
@@ -65,6 +69,16 @@ export class AnthropicReviewProvider implements ReviewProvider, GuidanceProvider
       buildGuidanceSystemPrompt(),
       buildGuidanceUserPrompt(request.question) + (request.context ?? ''),
       GUIDANCE_OUTPUT_SCHEMA,
+      'answer',
+      request.signal,
+    );
+  }
+
+  recall(request: RecallRequest): Promise<ProviderResponse> {
+    return this.ask(
+      buildRecallSystemPrompt(),
+      buildRecallUserPrompt(request.description),
+      RECALL_OUTPUT_SCHEMA,
       'answer',
       request.signal,
     );

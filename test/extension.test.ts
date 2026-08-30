@@ -14,6 +14,7 @@ import type * as FakeVscode from './fakes/vscode.js';
 import type * as ExtensionModule from '../src/vscode/extension.js';
 import type * as DiagnosticsModule from '../src/vscode/diagnostics.js';
 import type * as GuidanceModule from '../src/vscode/guidance.js';
+import type * as RecallModule from '../src/vscode/recall.js';
 
 const FAKE_PATH = require.resolve('./fakes/vscode.js');
 
@@ -42,12 +43,14 @@ const fake = require('./fakes/vscode.js') as typeof FakeVscode;
 const extension = require('../src/vscode/extension.js') as typeof ExtensionModule;
 const diagnosticsModule = require('../src/vscode/diagnostics.js') as typeof DiagnosticsModule;
 const guidanceModule = require('../src/vscode/guidance.js') as typeof GuidanceModule;
+const recallModule = require('../src/vscode/recall.js') as typeof RecallModule;
 /* eslint-enable @typescript-eslint/no-require-imports */
 
 const REQUIRED_COMMANDS = [
   'navigator.reviewChanges',
   'navigator.clearObservations',
   'navigator.whereToLook',
+  'navigator.recallName',
   'navigator.setApiKey',
   'navigator.clearApiKey',
   'navigator.showLog',
@@ -376,5 +379,76 @@ describe('progressive disclosure (SPEC §8)', () => {
   it('never offers a level the model did not give', () => {
     const picks = guidanceModule.buildGuidancePicks({ ...report, hints: [] });
     assert.equal(picks.some((pick) => pick.label === guidanceModule.MORE_SPECIFIC), false);
+  });
+});
+
+describe('What Was It Called? (SPEC §9)', () => {
+  const candidate = {
+    name: 'Array.prototype.reduce',
+    signature: 'reduce(callbackFn, initialValue?)',
+    concept: 'Folds an array into one value.',
+    search: 'MDN Array reduce',
+  };
+
+  beforeEach(() => {
+    fake.reset();
+    for (const name of API_KEY_VARS) {
+      delete process.env[name];
+    }
+    extension.activate(fake.makeExtensionContext() as never);
+  });
+
+  it('shows names and nothing else in the first list', () => {
+    const picks = recallModule.buildNamePicks({
+      status: 'answered',
+      candidates: [candidate, { name: 'Array.prototype.flatMap' }],
+      notes: [],
+    });
+    assert.deepEqual(picks.map((pick) => [pick.label, pick.description]), [
+      ['Array.prototype.reduce', undefined],
+      ['Array.prototype.flatMap', undefined],
+    ]);
+  });
+
+  it('gives back the name alone until the developer asks for more', () => {
+    const picks = recallModule.buildCandidatePicks(candidate);
+    assert.deepEqual(picks.map((pick) => pick.label), [guidanceModule.MORE_SPECIFIC]);
+  });
+
+  it('climbs the rungs in SPEC §9 order, one per request', () => {
+    assert.deepEqual(
+      recallModule.buildCandidatePicks(candidate, 1).map((pick) => pick.label),
+      [candidate.signature, '', guidanceModule.MORE_SPECIFIC],
+    );
+    assert.deepEqual(
+      recallModule.buildCandidatePicks(candidate, 2).map((pick) => pick.label),
+      [candidate.signature, candidate.concept, '', guidanceModule.MORE_SPECIFIC],
+    );
+    const all = recallModule.buildCandidatePicks(candidate, 3);
+    assert.deepEqual(all.map((pick) => pick.label), [
+      candidate.signature,
+      candidate.concept,
+      'Documentation',
+      candidate.search,
+    ]);
+    assert.equal(all[3].search, candidate.search);
+  });
+
+  it('offers nothing at all for a candidate that is only a name', () => {
+    assert.deepEqual(recallModule.buildCandidatePicks({ name: 'fetch' }), []);
+  });
+
+  it('stops for a missing API key instead of calling out', async () => {
+    fake.recorded.inputBoxAnswers.push('folds an array into one value');
+    await fake.commands.executeCommand('navigator.recallName');
+    assert.equal(fake.recorded.quickPicks.length, 0);
+    assert.match(fake.recorded.warnings[0], /no Anthropic API key/);
+  });
+
+  it('asks nothing when the question is dismissed', async () => {
+    fake.recorded.inputBoxAnswers.push(undefined);
+    await fake.commands.executeCommand('navigator.recallName');
+    assert.deepEqual(fake.recorded.quickPicks, []);
+    assert.deepEqual(fake.recorded.warnings, []);
   });
 });

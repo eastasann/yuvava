@@ -31,6 +31,12 @@ export interface GuidanceRequest {
   readonly signal?: AbortSignal;
 }
 
+/** A name the developer has forgotten but would recognise (SPEC §9). */
+export interface RecallRequest {
+  readonly description: string;
+  readonly signal?: AbortSignal;
+}
+
 export interface ProviderResponse {
   /** Raw model output. Parsed and validated by the core, never trusted. */
   readonly text: string;
@@ -53,8 +59,12 @@ export interface GuidanceProvider {
   guide(request: GuidanceRequest): Promise<ProviderResponse>;
 }
 
-/** What `providerFactory` builds: one client that can do either job. */
-export type NavigatorProvider = ReviewProvider & GuidanceProvider;
+export interface RecallProvider {
+  recall(request: RecallRequest): Promise<ProviderResponse>;
+}
+
+/** What `providerFactory` builds: one client that can do any of the jobs. */
+export type NavigatorProvider = ReviewProvider & GuidanceProvider & RecallProvider;
 
 /** An answer that could not be produced. Never a reason to touch user code. */
 export class ReviewUnavailableError extends Error {

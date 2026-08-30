@@ -15,13 +15,17 @@
 import OpenAI from 'openai';
 import { buildSystemPrompt, buildUserPrompt } from './prompt.js';
 import { buildGuidanceSystemPrompt, buildGuidanceUserPrompt } from './guidancePrompt.js';
+import { buildRecallSystemPrompt, buildRecallUserPrompt } from './recallPrompt.js';
 import { REVIEW_OUTPUT_SCHEMA } from './schema.js';
 import { GUIDANCE_OUTPUT_SCHEMA } from './guidanceSchema.js';
+import { RECALL_OUTPUT_SCHEMA } from './recallSchema.js';
 import {
   ReviewUnavailableError,
   type GuidanceProvider,
   type GuidanceRequest,
   type ProviderResponse,
+  type RecallProvider,
+  type RecallRequest,
   type ReviewProvider,
   type ReviewRequest,
 } from './provider.js';
@@ -34,6 +38,7 @@ const MAX_OUTPUT_TOKENS = 8192;
 
 const REVIEW_SCHEMA_NAME = 'navigator_review';
 const GUIDANCE_SCHEMA_NAME = 'navigator_guidance';
+const RECALL_SCHEMA_NAME = 'navigator_recall';
 
 /** One job the model can be asked to do: its prompts, schema and wording. */
 interface Job {
@@ -57,7 +62,7 @@ export interface OpenAIProviderOptions {
   readonly fetch?: typeof globalThis.fetch;
 }
 
-export class OpenAIReviewProvider implements ReviewProvider, GuidanceProvider {
+export class OpenAIReviewProvider implements ReviewProvider, GuidanceProvider, RecallProvider {
   private readonly client: OpenAI;
   private readonly model: string;
   private readonly compatible: boolean;
@@ -96,6 +101,19 @@ export class OpenAIReviewProvider implements ReviewProvider, GuidanceProvider {
         user: buildGuidanceUserPrompt(request.question) + (request.context ?? ''),
         schema: GUIDANCE_OUTPUT_SCHEMA,
         schemaName: GUIDANCE_SCHEMA_NAME,
+        declined: 'answer',
+      },
+      request.signal,
+    );
+  }
+
+  recall(request: RecallRequest): Promise<ProviderResponse> {
+    return this.run(
+      {
+        system: buildRecallSystemPrompt(),
+        user: buildRecallUserPrompt(request.description),
+        schema: RECALL_OUTPUT_SCHEMA,
+        schemaName: RECALL_SCHEMA_NAME,
         declined: 'answer',
       },
       request.signal,

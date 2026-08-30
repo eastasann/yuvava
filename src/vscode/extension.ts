@@ -18,6 +18,7 @@ import { promptForMissingApiKey, resolveApiKey, setApiKey } from './apiKey.js';
 import { currentWorkspaceFolder, readConfig } from './config.js';
 import { publishObservations } from './diagnostics.js';
 import { whereShouldILook } from './guidance.js';
+import { whatWasItCalled } from './recall.js';
 import { NavigatorStatusBar } from './statusBar.js';
 
 const TRANSIENT_MESSAGE_MS = 4000;
@@ -41,6 +42,9 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand('navigator.whereToLook', () =>
       whereShouldILook(context, log, statusBar),
+    ),
+    vscode.commands.registerCommand('navigator.recallName', () =>
+      whatWasItCalled(context, log, statusBar),
     ),
     vscode.commands.registerCommand('navigator.setApiKey', () =>
       setApiKey(context, activeProvider(), log),

@@ -34,6 +34,11 @@
         "category": "Navigator"
       },
       {
+        "command": "navigator.recallName",
+        "title": "What Was It Called?",
+        "category": "Navigator"
+      },
+      {
         "command": "navigator.setApiKey",
         "title": "Set API Key",
         "category": "Navigator"
