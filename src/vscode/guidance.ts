@@ -31,7 +31,7 @@ export const MORE_SPECIFIC = 'More specific';
  * A pick that opens a web search, one that reveals the next hint, or — most
  * of them — one that is simply there to be read.
  */
-interface GuidancePick extends vscode.QuickPickItem {
+export interface GuidancePick extends vscode.QuickPickItem {
   readonly search?: string;
   readonly more?: true;
 }

@@ -28,6 +28,8 @@ for why it is built the way it is.
 - Real problems show up as **diagnostics** in the editor and the Problems panel:
   correctness bugs, missed edge cases, unhandled null/undefined, error handling
   gaps, and — at higher intensity — concurrency, security and performance risks.
+- Hovering an observation offers **Go deeper** — one hint at a time about that
+  observation, and never the answer.
 - When there is nothing worth saying, it says nothing.
 
 ## What it deliberately does not do
@@ -104,6 +106,7 @@ from the VS Code command palette.
 | `Navigator: Review Current Changes` | Reviews the working tree against `navigator.diffBase`. |
 | `Navigator: Where Should I Look?` | Names what a task involves, and what to search for. Answers nothing. |
 | `Navigator: What Was It Called?` | Gives back a forgotten name. Signature, meaning and docs only if you ask. |
+| `Navigator: Go Deeper` | Opens one more level of hint about the observation under the cursor. |
 | `Navigator: Clear Observations` | Removes Navigator's diagnostics. |
 | `Navigator: Set API Key` | Stores the active provider's API key in secret storage. |
 | `Navigator: Clear API Key` | Removes the active provider's stored key. |

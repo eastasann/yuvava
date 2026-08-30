@@ -18,6 +18,8 @@ import { promptForMissingApiKey, resolveApiKey, setApiKey } from './apiKey.js';
 import { currentWorkspaceFolder, readConfig } from './config.js';
 import { publishObservations } from './diagnostics.js';
 import { whereShouldILook } from './guidance.js';
+import { GO_DEEPER_COMMAND, goDeeper, registerObservationHover } from './hover.js';
+import { forgetReview, rememberReview } from './observationStore.js';
 import { whatWasItCalled } from './recall.js';
 import { NavigatorStatusBar } from './statusBar.js';
 
@@ -30,7 +32,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const log = vscode.window.createOutputChannel('Navigator', { log: true });
   const statusBar = new NavigatorStatusBar();
 
-  context.subscriptions.push(diagnostics, log, statusBar);
+  context.subscriptions.push(diagnostics, log, statusBar, registerObservationHover());
 
   context.subscriptions.push(
     vscode.commands.registerCommand('navigator.reviewChanges', () =>
@@ -38,8 +40,12 @@ export function activate(context: vscode.ExtensionContext): void {
     ),
     vscode.commands.registerCommand('navigator.clearObservations', () => {
       diagnostics.clear();
+      forgetReview();
       statusBar.setIdle();
     }),
+    vscode.commands.registerCommand(GO_DEEPER_COMMAND, (file?: unknown, line?: unknown) =>
+      goDeeper(context, log, statusBar, file, line),
+    ),
     vscode.commands.registerCommand('navigator.whereToLook', () =>
       whereShouldILook(context, log, statusBar),
     ),
@@ -164,6 +170,7 @@ async function reviewCurrentChanges(
 
         if (report.status === 'no-changes') {
           diagnostics.clear();
+          forgetReview();
           statusBar.setIdle();
           vscode.window.setStatusBarMessage(
             `Navigator: no changes against ${config.diffBase}`,
@@ -181,6 +188,7 @@ async function reviewCurrentChanges(
           return;
         }
 
+        rememberReview({ repositoryRoot, observations: report.observations, files: report.files });
         const published = await publishObservations(diagnostics, repositoryRoot, report.observations);
         for (const note of published.notes) {
           log.info(note);

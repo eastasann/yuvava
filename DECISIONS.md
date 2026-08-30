@@ -483,3 +483,59 @@ Consequence:
 A new job is a new method on both providers plus a prompt and a schema — about
 thirty lines. That is the intended cost. Each provider keeps one private
 request path (`ask` / `run`), so the wire format is written once.
+
+## Decision: A hover provider is allowed, and it is the only provider there will be
+
+`src/vscode/hover.ts` registers a hover provider over Navigator's own
+observations. Code action, completion, inline completion, formatting, rename
+and on-will-save providers stay banned, and `test/invariant.test.ts` now pins
+that hover is the *only* provider of any kind that Navigator registers.
+
+Reason:
+The banned six all exist to produce an edit. `vscode.Hover` cannot: it is a
+`MarkdownString` and a range, with no member that reaches a document. The
+distinction the invariant is drawing is "can this change a file", not "is this
+a provider", and stating it that way is more honest than a list that happens
+not to contain hover yet.
+
+Why it earns its place:
+VS Code already renders a diagnostic's message on hover, so a hover that
+repeated it would be pure noise. What this one adds is the entry to SPEC §8 —
+one link, `Go deeper`, which asks for a hint about that observation and opens
+the same one-at-a-time disclosure the guidance command uses.
+
+Guards:
+- The `MarkdownString` is trusted, which is what lets a command link work at
+  all, but it names the single command it may invoke
+  (`isTrusted: { enabledCommands: [GO_DEEPER_COMMAND] }`). The invariant test
+  asserts both that line and that the file contains exactly one command link.
+- The link carries the observation's file and line, never its content.
+
+## Decision: Going deeper reuses the guidance path rather than growing a fourth
+
+`Navigator: Go Deeper` builds a question out of the observation plus the hunk
+it was found in (`src/core/observationHints.ts`) and sends it through
+`runGuidance`.
+
+Reason:
+"I have been told what is wrong and I want to work it out myself" is the same
+request as "where should I look", and it wants the same answer shape: things
+involved, hints that narrow one step at a time, terms to search. A fourth
+prompt and schema would have had to say all the same things, and would have
+been a second place for the hint rules to drift.
+
+Consequence:
+The observation the developer has already read is Level 0, so this path opens
+with the first hint already revealed, where the guidance command starts at zero.
+
+## Decision: The last review is remembered in memory, and that is not history
+
+`src/vscode/observationStore.ts` holds the last review's observations and diff
+files so the hover knows what is under the cursor. Each review replaces the
+last, `Clear Observations` empties it, and a window reload starts blank.
+
+Reason:
+The hover needs to answer "which observation is this line" without re-running
+anything. Nothing is written to disk, and nothing accumulates — this is not
+review history (which stays unbuilt; see its own entry), and it should not
+become the place someone adds it.

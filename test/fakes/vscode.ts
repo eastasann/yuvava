@@ -22,6 +22,7 @@ export interface Recorded {
   /** Labels to choose from successive `showQuickPick` calls. */
   quickPickChoices: Array<string | undefined>;
   openedExternal: string[];
+  hoverProviders: FakeHoverProvider[];
 }
 
 export const recorded: Recorded = {
@@ -39,6 +40,7 @@ export const recorded: Recorded = {
   quickPicks: [],
   quickPickChoices: [],
   openedExternal: [],
+  hoverProviders: [],
 };
 
 export function reset(): void {
@@ -56,6 +58,7 @@ export function reset(): void {
   recorded.quickPicks.length = 0;
   recorded.quickPickChoices.length = 0;
   recorded.openedExternal.length = 0;
+  recorded.hoverProviders.length = 0;
 }
 
 export class Uri {
@@ -82,6 +85,19 @@ export class Range {
     this.start = new Position(startLine, startCharacter);
     this.end = new Position(endLine, endCharacter);
   }
+}
+
+export class MarkdownString {
+  value = '';
+  isTrusted: boolean | { enabledCommands: readonly string[] } = false;
+  appendMarkdown(text: string): MarkdownString {
+    this.value += text;
+    return this;
+  }
+}
+
+export class Hover {
+  constructor(readonly contents: MarkdownString) {}
 }
 
 export const DiagnosticSeverity = { Error: 0, Warning: 1, Information: 2, Hint: 3 } as const;
@@ -117,9 +133,20 @@ export class DiagnosticCollection {
   }
 }
 
+export interface FakeHoverProvider {
+  provideHover(
+    document: { uri: Uri },
+    position: { line: number },
+  ): Hover | undefined;
+}
+
 export const languages = {
   createDiagnosticCollection(_name: string): DiagnosticCollection {
     return new DiagnosticCollection();
+  },
+  registerHoverProvider(_selector: unknown, provider: FakeHoverProvider) {
+    recorded.hoverProviders.push(provider);
+    return { dispose: () => undefined };
   },
 };
 
@@ -138,7 +165,9 @@ export const commands = {
 };
 
 export const window = {
-  activeTextEditor: undefined as { document: { uri: Uri } } | undefined,
+  activeTextEditor: undefined as
+    | { document: { uri: Uri }; selection: { active: { line: number } } }
+    | undefined,
   createOutputChannel(_name: string, _options?: unknown) {
     const log = (level: string, message: string): void => {
       recorded.logs.push(`${level}: ${message}`);

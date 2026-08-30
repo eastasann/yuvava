@@ -39,6 +39,11 @@
         "category": "Navigator"
       },
       {
+        "command": "navigator.goDeeper",
+        "title": "Go Deeper",
+        "category": "Navigator"
+      },
+      {
         "command": "navigator.setApiKey",
         "title": "Set API Key",
         "category": "Navigator"
