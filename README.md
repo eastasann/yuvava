@@ -33,13 +33,60 @@ for why it is built the way it is.
 
 ## Setup
 
-1. Install the extension (`npm run package` produces `navigator.vsix`;
-   install it with `code --install-extension navigator.vsix`).
-2. Pick a provider with `navigator.provider` (`anthropic`, the default, or
+Navigator is installed from a locally built `.vsix`; it is not on the
+Marketplace.
+
+```bash
+npm install
+npm run install:local
+```
+
+That runs `npm run verify`, builds `yuvava.vsix`, and installs it with
+`code --install-extension yuvava.vsix --force`. Then, in VS Code, run
+**Developer: Reload Window** — the new build does not take effect until you do.
+
+Next:
+
+1. Pick a provider with `navigator.provider` (`anthropic`, the default, or
    `openai`), then run `Navigator: Set API Key` — the key is kept in VS Code
    secret storage, one per provider. `ANTHROPIC_API_KEY` / `OPENAI_API_KEY`
    from the environment are used as fallbacks.
-3. Make some changes, then run `Navigator: Review Current Changes`.
+2. Make some changes, then run `Navigator: Review Current Changes`.
+
+## Updating
+
+A sideloaded extension never updates itself — VS Code only auto-updates
+Marketplace extensions. Every update is the same three steps:
+
+```bash
+git pull
+npm ci                 # only when dependencies changed
+npm run install:local
+```
+
+then **Developer: Reload Window**. `--force` is what lets a rebuild replace an
+identical version number; without it VS Code sees the extension is already
+installed and does nothing.
+
+Bumping the version (`npm version patch`) before rebuilding is worth the extra
+second: otherwise the Extensions view always reads `0.1.0`, and you cannot tell
+this morning's build from last week's.
+
+Useful while operating it:
+
+```bash
+code --list-extensions --show-versions | grep yuvava
+code --uninstall-extension navigator.yuvava
+```
+
+The extension id is `navigator.yuvava` — `publisher` is still a placeholder,
+since publishing is not the plan. Settings live in `settings.json` and survive
+updates; the API key lives in secret storage keyed by that id, so it survives
+updates too, but changing `publisher` or `name` would orphan it and you would
+run `Navigator: Set API Key` once more.
+
+If `code` is not found, run **Shell Command: Install 'code' command in PATH**
+from the VS Code command palette.
 
 ## Commands
 
@@ -76,8 +123,9 @@ stripped whichever provider returns it.
 
 ```bash
 npm install
-npm run verify   # lint + typecheck/compile + tests
-npm run package  # build navigator.vsix
+npm run verify         # lint + typecheck/compile + tests — the gate
+npm run package        # build yuvava.vsix
+npm run install:local  # verify, build, and install into VS Code
 ```
 
 Agents working on this repository should read [AGENTS.md](AGENTS.md) first.
