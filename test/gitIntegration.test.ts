@@ -4,6 +4,13 @@
  * Everything else stubs the runner, which leaves the actual `execFile` path
  * and git's real diff output untested. This builds a throwaway repository,
  * makes a change, and drives the pipeline end to end with a stub model.
+ *
+ * It **fails** rather than skips when git is missing (issue #22). Skipping is
+ * how a green run stops meaning what it says: 335 passing tests would look
+ * identical whether the only coverage of the real git path ran or not, and the
+ * difference would have to be noticed in a summary line nobody reads. Git is
+ * not an optional dependency of a tool that reviews git diffs, so requiring it
+ * to verify is not a burden — `AGENTS.md` says so.
  */
 
 import assert from 'node:assert/strict';
@@ -18,12 +25,11 @@ import { parseUnifiedDiff, renderAnnotatedDiff, reviewableFiles } from '../src/c
 import { runReview } from '../src/core/review.js';
 import type { ReviewProvider } from '../src/core/provider.js';
 
-function gitAvailable(): boolean {
+function gitVersion(): string | undefined {
   try {
-    execFileSync('git', ['--version'], { stdio: 'ignore' });
-    return true;
+    return execFileSync('git', ['--version'], { encoding: 'utf8' }).trim();
   } catch {
-    return false;
+    return undefined;
   }
 }
 
@@ -42,7 +48,15 @@ const CHANGED = `export function total(cart) {
 
 let repo: string | undefined;
 
-describe('git integration', { skip: gitAvailable() ? false : 'git is not installed' }, () => {
+describe('git integration', () => {
+  it('has git on PATH, because the real git path is only covered here', () => {
+    assert.ok(
+      gitVersion(),
+      'git is not installed. `npm run verify` requires it: without it this suite is ' +
+        'the only untested part of the product, and nothing in the output would say so.',
+    );
+  });
+
   before(() => {
     repo = mkdtempSync(path.join(tmpdir(), 'navigator-git-'));
     const git = (...args: string[]): void => {

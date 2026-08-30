@@ -1,7 +1,7 @@
 {
   "name": "yuvava",
   "displayName": "Navigator",
-  "description": "An AI pair-programming navigator that observes your changes and points out problems \u2014 without writing your code.",
+  "description": "An AI pair-programming navigator that observes your changes and points out problems — without writing your code.",
   "version": "0.1.0",
   "license": "MIT",
   "publisher": "navigator",
@@ -83,7 +83,7 @@
         "navigator.openaiBaseUrl": {
           "type": "string",
           "default": "",
-          "markdownDescription": "An OpenAI-compatible endpoint to use instead of OpenAI itself \u2014 Groq, Cerebras, Ollama, LM Studio, OpenRouter. Setting it switches the request to `/chat/completions`, which is what those services implement.\n\nExamples: `https://api.groq.com/openai/v1`, `http://localhost:11434/v1`.\n\n**Your diff is sent to whatever you point this at.** Free tiers commonly train on the data they receive \u2014 check the provider's terms. Navigator is a personal learning tool and does not manage this for you."
+          "markdownDescription": "An OpenAI-compatible endpoint to use instead of OpenAI itself — Groq, Cerebras, Ollama, LM Studio, OpenRouter. Setting it switches the request to `/chat/completions`, which is what those services implement.\n\nExamples: `https://api.groq.com/openai/v1`, `http://localhost:11434/v1`.\n\n**Your diff is sent to whatever you point this at.** Free tiers commonly train on the data they receive — check the provider's terms. Navigator is a personal learning tool and does not manage this for you."
         },
         "navigator.reviewIntensity": {
           "type": "string",
@@ -148,6 +148,9 @@
     "lint": "eslint src test --max-warnings 0",
     "test": "npm run compile && node --test \"out/test/**/*.test.js\"",
     "verify": "npm run lint && npm run compile && node --test \"out/test/**/*.test.js\"",
+    "eval": "npm run compile && node scripts/eval.mjs",
+    "smoke": "npm run compile && node scripts/smoke.mjs",
+    "test:host": "npm run compile && node scripts/test-host.mjs",
     "package": "npm run compile && vsce package -o yuvava.vsix",
     "install:local": "npm run verify && npm run package && code --install-extension yuvava.vsix --force && echo Installed. Run Developer: Reload Window in VS Code to activate it."
   },
@@ -157,6 +160,7 @@
     "@types/vscode": "^1.90.0",
     "@typescript-eslint/eslint-plugin": "^8.18.0",
     "@typescript-eslint/parser": "^8.18.0",
+    "@vscode/test-electron": "^3.1.0",
     "@vscode/vsce": "^3.2.0",
     "eslint": "^9.17.0",
     "typescript": "^5.7.2",

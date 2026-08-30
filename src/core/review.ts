@@ -37,6 +37,12 @@ export interface ReviewReport {
   /** Notes for the log: parse problems, discarded issues, size warnings. */
   readonly notes: readonly string[];
   readonly files: readonly DiffFile[];
+  /**
+   * The provider's raw answer, before parsing. Absent when no request was
+   * made. Exists so `npm run eval` can record a real answer and replay it
+   * later (`test/eval/recorded.ts`); the extension never displays it.
+   */
+  readonly rawText?: string;
 }
 
 const EMPTY_REPORT = (status: ReviewStatus, notes: string[] = [], files: DiffFile[] = []): ReviewReport => ({
@@ -107,5 +113,6 @@ export async function runReview(options: ReviewOptions): Promise<ReviewReport> {
     dropped: outcome.dropped,
     notes,
     files,
+    rawText: response.text,
   };
 }

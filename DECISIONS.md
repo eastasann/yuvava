@@ -685,3 +685,115 @@ Consequences:
 - Nothing is sent to an OpenAI-compatible endpoint unless the setting is
   explicitly set, so an endpoint that rejects `reasoning_effort` is only
   reachable by someone who asked for it.
+
+## Decision: `npm run verify` requires git, and the git suite fails without it
+
+`test/gitIntegration.test.ts` used to skip itself when `git --version` failed.
+It now asserts git is present and fails when it is not.
+
+Reason:
+It is the only coverage of the real `execFile` path and of git's actual diff
+output. Skipping made a green run ambiguous: the same "all tests pass" line
+appeared whether the product's one real integration ran or not, and telling the
+difference meant noticing a skip count in a summary nobody reads. A test that
+can silently not run is worse than one that is missing, because it is counted.
+
+Why requiring git is not a burden:
+Navigator does nothing at all without git. Requiring it to *develop* Navigator
+is not a new dependency, it is the same one, stated. `AGENTS.md` says so under
+Commands.
+
+Verified: with `PATH` emptied, the suite fails with a named assertion rather
+than reporting zero failures.
+
+## Decision: Review quality is measured by an eval set of invented diffs
+
+`test/eval/cases.ts` holds nine synthetic changes with known answers, scored on
+four numbers per intensity (`test/eval/score.ts`). `npm test` scores them
+against fixed answers; `npm run eval` scores them against a real endpoint.
+
+Why four numbers rather than one:
+`SPEC.md` §7 makes several claims and three of them are about restraint. A
+single "accuracy" figure would let a prompt that finds every planted bug *and*
+comments on every clean diff look good, which is the exact failure mode the
+product exists to avoid. So: miss rate, false-positive rate, noise rate, and
+silence correctness — and the last two are the ones to read first.
+
+Where the line between them falls:
+Mechanically, not by judgement. On a case whose correct review is silence,
+every observation is a **false positive**. On a case with a planted bug, an
+observation matching none of the expectations is **noise** — meaning
+*unasked-for*, not *wrong*. A model can be right about something nobody needed
+to hear, and §7 is precisely about suppressing that.
+
+Matching:
+An observation counts for an expectation when it is in the right file, within
+two lines, and mentions at least one of the expectation's words. The tolerance
+stops the eval from measuring line-citing instead of reviewing; the word list
+stops an observation being credited for landing on the right line while talking
+about something else.
+
+Two rules that keep the set honest:
+- **Every case is invented.** `LOOP.md` §2.2 forbids code that was under review
+  from entering this public repository, and an eval set is the likeliest place
+  for it to leak in. Any case added later must be written for the purpose.
+- **A test asserts every expectation lies inside its own diff.** Otherwise
+  `anchor.ts` would discard it before it became an observation, and the eval
+  would be measuring anchoring while appearing to measure review quality.
+
+What the offline run is worth:
+It pins the pipeline and the scorer against hand-written answers, which is a
+real regression test and is *not* a quality measurement. The numbers that mean
+something come from `npm run eval`, which needs a key.
+
+## Decision: `npm run smoke` is the one command for whoever holds a key
+
+`scripts/smoke.mjs` makes one real request down each of the four network paths
+— review, guidance, recall, and the MDN index — prints what came back, and on
+failure prints the raw error plus a note about the two things most likely to be
+wrong on a compatible endpoint.
+
+Reason:
+Issue #16 is an environment blocker, not a design question: no key exists here
+and no server has ever accepted one of these requests. The useful thing an
+agent without a key can do is make the check take one command instead of an
+afternoon, so the person who has one is not also asked to work out what to run.
+
+Why it names the two suspects in its output:
+`isStructuredOutputRejection` matches on error *wording*, which varies between
+services, and token limits may be capped or interpreted differently. Either is
+fixed instantly by one real error message and not at all by reasoning. The
+script asks for that message by name.
+
+Verified as far as it can be: run against a local OpenAI-compatible stub
+server, review, guidance and recall all completed and the MDN check failed with
+its intended message.
+
+## Decision: The extension-host checks exist, and are not part of the gate
+
+`npm run test:host` starts a real VS Code through `@vscode/test-electron` and
+runs `scripts/host/index.cjs` inside it: the extension is installed under the
+id its secrets are keyed by, it activates (so `main` resolved), every
+contributed command is in the palette, VS Code accepts the diagnostics, and
+the hover provider is live and silent where nothing has been reviewed.
+
+Why it is not in `npm run verify`:
+It needs a display, or `xvfb-run`. The gate has to be runnable by an agent in
+a container, and a gate that quietly skipped part of itself would be exactly
+the problem decided against in `test/gitIntegration.test.ts` — so rather than a
+skipping test in the gate, this is a separate command that either runs properly
+or is not claimed to have run.
+
+Why CommonJS:
+VS Code `require`s `extensionTestsPath`, and the Node inside a VS Code release
+is not always new enough to `require` an ES module. `.cjs` removes a failure
+mode from the one command that cannot be tried here.
+
+What is still not covered, even by this:
+`SecretStorage` behaviour, because the checks run outside the extension's own
+`ExtensionContext` and cannot reach it. And nothing in the host checks calls
+out to a model — `npm run smoke` is that.
+
+Status: written, loadable, and never run. This environment cannot even
+download VS Code (`update.code.visualstudio.com` is outside its egress
+allowlist), which is issue #18 and is recorded in `PROGRESS.md`.
