@@ -29,6 +29,21 @@
         "category": "Navigator"
       },
       {
+        "command": "navigator.whereToLook",
+        "title": "Where Should I Look?",
+        "category": "Navigator"
+      },
+      {
+        "command": "navigator.recallName",
+        "title": "What Was It Called?",
+        "category": "Navigator"
+      },
+      {
+        "command": "navigator.goDeeper",
+        "title": "Go Deeper",
+        "category": "Navigator"
+      },
+      {
         "command": "navigator.setApiKey",
         "title": "Set API Key",
         "category": "Navigator"

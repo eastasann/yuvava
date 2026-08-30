@@ -15,6 +15,14 @@ export interface Recorded {
   workspaceFolders: Array<{ uri: { fsPath: string }; name: string; index: number }> | undefined;
   secrets: Map<string, string>;
   nextWarningChoice: string | undefined;
+  /** Answers queued for `showInputBox`, consumed in order. */
+  inputBoxAnswers: Array<string | undefined>;
+  /** Every set of items `showQuickPick` was given, in order. */
+  quickPicks: unknown[][];
+  /** Labels to choose from successive `showQuickPick` calls. */
+  quickPickChoices: Array<string | undefined>;
+  openedExternal: string[];
+  hoverProviders: FakeHoverProvider[];
 }
 
 export const recorded: Recorded = {
@@ -28,6 +36,11 @@ export const recorded: Recorded = {
   workspaceFolders: undefined,
   secrets: new Map(),
   nextWarningChoice: undefined,
+  inputBoxAnswers: [],
+  quickPicks: [],
+  quickPickChoices: [],
+  openedExternal: [],
+  hoverProviders: [],
 };
 
 export function reset(): void {
@@ -41,12 +54,20 @@ export function reset(): void {
   recorded.workspaceFolders = undefined;
   recorded.secrets = new Map();
   recorded.nextWarningChoice = undefined;
+  recorded.inputBoxAnswers.length = 0;
+  recorded.quickPicks.length = 0;
+  recorded.quickPickChoices.length = 0;
+  recorded.openedExternal.length = 0;
+  recorded.hoverProviders.length = 0;
 }
 
 export class Uri {
   private constructor(readonly fsPath: string) {}
   static file(fsPath: string): Uri {
     return new Uri(fsPath);
+  }
+  static parse(value: string): Uri {
+    return new Uri(value);
   }
   toString(): string {
     return this.fsPath;
@@ -66,6 +87,19 @@ export class Range {
   }
 }
 
+export class MarkdownString {
+  value = '';
+  isTrusted: boolean | { enabledCommands: readonly string[] } = false;
+  appendMarkdown(text: string): MarkdownString {
+    this.value += text;
+    return this;
+  }
+}
+
+export class Hover {
+  constructor(readonly contents: MarkdownString) {}
+}
+
 export const DiagnosticSeverity = { Error: 0, Warning: 1, Information: 2, Hint: 3 } as const;
 
 export class Diagnostic {
@@ -79,6 +113,7 @@ export class Diagnostic {
 }
 
 export const StatusBarAlignment = { Left: 1, Right: 2 } as const;
+export const QuickPickItemKind = { Separator: -1, Default: 0 } as const;
 export const ProgressLocation = { SourceControl: 1, Window: 10, Notification: 15 } as const;
 
 export class DiagnosticCollection {
@@ -98,9 +133,20 @@ export class DiagnosticCollection {
   }
 }
 
+export interface FakeHoverProvider {
+  provideHover(
+    document: { uri: Uri },
+    position: { line: number },
+  ): Hover | undefined;
+}
+
 export const languages = {
   createDiagnosticCollection(_name: string): DiagnosticCollection {
     return new DiagnosticCollection();
+  },
+  registerHoverProvider(_selector: unknown, provider: FakeHoverProvider) {
+    recorded.hoverProviders.push(provider);
+    return { dispose: () => undefined };
   },
 };
 
@@ -119,7 +165,21 @@ export const commands = {
 };
 
 export const window = {
-  activeTextEditor: undefined as { document: { uri: Uri } } | undefined,
+  activeTextEditor: undefined as
+    | {
+        document: {
+          uri: Uri;
+          languageId: string;
+          getText(range?: unknown): string;
+        };
+        selection: {
+          active: { line: number };
+          isEmpty: boolean;
+          start: { line: number };
+          end: { line: number };
+        };
+      }
+    | undefined,
   createOutputChannel(_name: string, _options?: unknown) {
     const log = (level: string, message: string): void => {
       recorded.logs.push(`${level}: ${message}`);
@@ -151,7 +211,12 @@ export const window = {
     return Promise.resolve(undefined);
   },
   showInputBox(_options?: unknown): Promise<string | undefined> {
-    return Promise.resolve(undefined);
+    return Promise.resolve(recorded.inputBoxAnswers.shift());
+  },
+  showQuickPick<T extends { label: string }>(items: T[], _options?: unknown): Promise<T | undefined> {
+    recorded.quickPicks.push(items);
+    const wanted = recorded.quickPickChoices.shift();
+    return Promise.resolve(wanted === undefined ? undefined : items.find((item) => item.label === wanted));
   },
   setStatusBarMessage(message: string, _timeout?: number) {
     recorded.statusMessages.push(message);
@@ -165,12 +230,24 @@ export const window = {
   },
 };
 
+export const env = {
+  openExternal(uri: Uri): Promise<boolean> {
+    recorded.openedExternal.push(uri.toString());
+    return Promise.resolve(true);
+  },
+};
+
 export const workspace = {
   get workspaceFolders() {
     return recorded.workspaceFolders;
   },
   getWorkspaceFolder(_uri: Uri) {
     return recorded.workspaceFolders?.[0];
+  },
+  asRelativePath(uri: Uri | string, _includeFolder?: boolean): string {
+    const full = typeof uri === 'string' ? uri : uri.fsPath;
+    const root = recorded.workspaceFolders?.[0]?.uri.fsPath;
+    return root !== undefined && full.startsWith(`${root}/`) ? full.slice(root.length + 1) : full;
   },
   getConfiguration(_section: string, _scope?: unknown) {
     return {
@@ -191,6 +268,29 @@ export const workspace = {
     });
   },
 };
+
+/** An editor with `text` selected over the given 1-based line range. */
+export function fakeEditor(
+  fsPath: string,
+  text: string,
+  startLine = 1,
+  languageId = 'typescript',
+): NonNullable<typeof window.activeTextEditor> {
+  const endLine = startLine + Math.max(0, text.split('\n').length - 1);
+  return {
+    document: {
+      uri: Uri.file(fsPath),
+      languageId,
+      getText: () => text,
+    },
+    selection: {
+      active: { line: startLine - 1 },
+      isEmpty: text.length === 0,
+      start: { line: startLine - 1 },
+      end: { line: endLine - 1 },
+    },
+  };
+}
 
 export function makeExtensionContext(): {
   subscriptions: Array<{ dispose(): void }>;

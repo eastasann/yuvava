@@ -1,9 +1,14 @@
 /**
- * The seam between Navigator and whatever produces a review.
+ * The seam between Navigator and whatever produces an answer.
  *
- * Keeping this an interface is what makes the review pipeline testable without
- * a network or an API key — and it keeps every model-specific detail out of
- * the code that decides what the developer is shown.
+ * Keeping this an interface is what makes the pipelines testable without a
+ * network or an API key — and it keeps every model-specific detail out of the
+ * code that decides what the developer is shown.
+ *
+ * There are two request shapes, not one general one. A provider is told which
+ * job it is doing, so the prompt and the schema for that job live on
+ * Navigator's side of the seam rather than in the caller: nothing outside
+ * `src/core` can ask a model an arbitrary question.
  */
 
 import type { ReviewIntensity } from './types.js';
@@ -15,7 +20,24 @@ export interface ReviewRequest {
   readonly signal?: AbortSignal;
 }
 
-export interface ReviewResponse {
+/** What the developer said they are trying to do (SPEC §10). */
+export interface GuidanceRequest {
+  readonly question: string;
+  /**
+   * Optional code the developer had selected, already rendered and capped by
+   * the caller. Read-only context; nothing is ever written back to it.
+   */
+  readonly context?: string;
+  readonly signal?: AbortSignal;
+}
+
+/** A name the developer has forgotten but would recognise (SPEC §9). */
+export interface RecallRequest {
+  readonly description: string;
+  readonly signal?: AbortSignal;
+}
+
+export interface ProviderResponse {
   /** Raw model output. Parsed and validated by the core, never trusted. */
   readonly text: string;
   /**
@@ -26,11 +48,25 @@ export interface ReviewResponse {
   readonly warnings?: readonly string[];
 }
 
+/** Historic name for {@link ProviderResponse}; the shape is the same. */
+export type ReviewResponse = ProviderResponse;
+
 export interface ReviewProvider {
-  review(request: ReviewRequest): Promise<ReviewResponse>;
+  review(request: ReviewRequest): Promise<ProviderResponse>;
 }
 
-/** A review that could not be produced. Never a reason to touch user code. */
+export interface GuidanceProvider {
+  guide(request: GuidanceRequest): Promise<ProviderResponse>;
+}
+
+export interface RecallProvider {
+  recall(request: RecallRequest): Promise<ProviderResponse>;
+}
+
+/** What `providerFactory` builds: one client that can do any of the jobs. */
+export type NavigatorProvider = ReviewProvider & GuidanceProvider & RecallProvider;
+
+/** An answer that could not be produced. Never a reason to touch user code. */
 export class ReviewUnavailableError extends Error {
   constructor(message: string, options?: { cause?: unknown }) {
     super(message, options);

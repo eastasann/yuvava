@@ -22,6 +22,21 @@ function oneOf<T extends string>(value: unknown, allowed: readonly T[], fallback
   return typeof value === 'string' && (allowed as readonly string[]).includes(value) ? (value as T) : fallback;
 }
 
+/**
+ * The folder a command applies to: the one holding the active editor, else the
+ * first in the workspace. Undefined when no folder is open at all.
+ */
+export function currentWorkspaceFolder(): vscode.WorkspaceFolder | undefined {
+  const activeUri = vscode.window.activeTextEditor?.document.uri;
+  if (activeUri !== undefined) {
+    const folder = vscode.workspace.getWorkspaceFolder(activeUri);
+    if (folder !== undefined) {
+      return folder;
+    }
+  }
+  return vscode.workspace.workspaceFolders?.[0];
+}
+
 export function readConfig(scope?: vscode.Uri): NavigatorConfig {
   const section = vscode.workspace.getConfiguration('navigator', scope);
 

@@ -9,7 +9,7 @@
 
 import { AnthropicReviewProvider, DEFAULT_ANTHROPIC_MODEL } from './anthropicProvider.js';
 import { OpenAIReviewProvider, DEFAULT_OPENAI_MODEL } from './openaiProvider.js';
-import type { ReviewProvider } from './provider.js';
+import type { NavigatorProvider } from './provider.js';
 import type { ProviderKind } from './types.js';
 
 export interface ProviderProfile {
@@ -54,7 +54,7 @@ export interface CreateProviderOptions {
   readonly fetch?: typeof globalThis.fetch;
 }
 
-export function createReviewProvider(options: CreateProviderOptions): ReviewProvider {
+export function createReviewProvider(options: CreateProviderOptions): NavigatorProvider {
   const model = options.model?.trim() || providerProfile(options.kind).defaultModel;
   const shared = {
     apiKey: options.apiKey,

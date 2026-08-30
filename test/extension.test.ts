@@ -13,6 +13,9 @@ import { after, before, beforeEach, describe, it } from 'node:test';
 import type * as FakeVscode from './fakes/vscode.js';
 import type * as ExtensionModule from '../src/vscode/extension.js';
 import type * as DiagnosticsModule from '../src/vscode/diagnostics.js';
+import type * as GuidanceModule from '../src/vscode/guidance.js';
+import type * as RecallModule from '../src/vscode/recall.js';
+import type * as SelectionModule from '../src/vscode/selection.js';
 
 const FAKE_PATH = require.resolve('./fakes/vscode.js');
 
@@ -40,11 +43,16 @@ after(() => {
 const fake = require('./fakes/vscode.js') as typeof FakeVscode;
 const extension = require('../src/vscode/extension.js') as typeof ExtensionModule;
 const diagnosticsModule = require('../src/vscode/diagnostics.js') as typeof DiagnosticsModule;
+const guidanceModule = require('../src/vscode/guidance.js') as typeof GuidanceModule;
+const recallModule = require('../src/vscode/recall.js') as typeof RecallModule;
+const selectionModule = require('../src/vscode/selection.js') as typeof SelectionModule;
 /* eslint-enable @typescript-eslint/no-require-imports */
 
 const REQUIRED_COMMANDS = [
   'navigator.reviewChanges',
   'navigator.clearObservations',
+  'navigator.whereToLook',
+  'navigator.recallName',
   'navigator.setApiKey',
   'navigator.clearApiKey',
   'navigator.showLog',
@@ -253,5 +261,354 @@ describe('publishObservations', () => {
     ]);
     assert.equal(result.shown, 0);
     assert.match(result.notes[0], /line no longer exists/);
+  });
+});
+
+describe('Where Should I Look?', () => {
+  beforeEach(() => {
+    fake.reset();
+    for (const name of API_KEY_VARS) {
+      delete process.env[name];
+    }
+    extension.activate(fake.makeExtensionContext() as never);
+  });
+
+  after(() => {
+    for (const [name, value] of Object.entries(savedKeys)) {
+      if (value === undefined) {
+        delete process.env[name];
+      } else {
+        process.env[name] = value;
+      }
+    }
+  });
+
+  it('asks nothing and shows nothing when the question is dismissed', async () => {
+    fake.recorded.inputBoxAnswers.push(undefined);
+    await fake.commands.executeCommand('navigator.whereToLook');
+    assert.deepEqual(fake.recorded.quickPicks, []);
+    assert.deepEqual(fake.recorded.warnings, []);
+  });
+
+  it('treats a blank question as no question', async () => {
+    fake.recorded.inputBoxAnswers.push('   ');
+    await fake.commands.executeCommand('navigator.whereToLook');
+    assert.deepEqual(fake.recorded.quickPicks, []);
+  });
+
+  it('stops for a missing API key instead of calling out', async () => {
+    fake.recorded.inputBoxAnswers.push('add a retry to fetch');
+    await fake.commands.executeCommand('navigator.whereToLook');
+    assert.equal(fake.recorded.quickPicks.length, 0);
+    assert.match(fake.recorded.warnings[0], /no Anthropic API key/);
+  });
+});
+
+describe('buildGuidancePicks', () => {
+  it('shows nothing at all when there is nothing to point at', () => {
+    const picks = guidanceModule.buildGuidancePicks({
+      status: 'answered',
+      topics: [],
+      searches: [],
+      hints: [],
+      explore: [],
+      notes: [],
+    });
+    assert.deepEqual(picks, []);
+  });
+
+  it('lists the topics, then the searches under their own heading', () => {
+    const picks = guidanceModule.buildGuidancePicks({
+      status: 'answered',
+      topics: [{ name: 'AbortSignal.timeout()', note: 'the deadline' }, { name: '4xx versus 5xx' }],
+      searches: ['MDN AbortSignal'],
+      hints: [],
+      explore: [],
+      notes: [],
+    });
+    assert.deepEqual(
+      picks.map((pick) => [pick.label, pick.description, pick.search]),
+      [
+        ['AbortSignal.timeout()', 'the deadline', undefined],
+        ['4xx versus 5xx', undefined, undefined],
+        ['Search', undefined, undefined],
+        ['MDN AbortSignal', undefined, 'MDN AbortSignal'],
+      ],
+    );
+    assert.equal(picks[2].kind, fake.QuickPickItemKind.Separator);
+  });
+
+  it('offers no heading when the model had no search terms', () => {
+    const picks = guidanceModule.buildGuidancePicks({
+      status: 'answered',
+      topics: [{ name: 'backoff' }],
+      searches: [],
+      hints: [],
+      explore: [],
+      notes: [],
+    });
+    assert.equal(picks.length, 1);
+  });
+});
+
+describe('progressive disclosure (SPEC §8)', () => {
+  const report = {
+    status: 'answered' as const,
+    topics: [{ name: 'backoff' }],
+    searches: [],
+    hints: ['Consider what happens on the third failure.', 'The delay is not constant.'],
+    explore: [],
+    notes: [],
+  };
+
+  it('shows no hint until the developer asks for one', () => {
+    const picks = guidanceModule.buildGuidancePicks(report);
+    assert.deepEqual(picks.map((pick) => pick.label), ['backoff', '', guidanceModule.MORE_SPECIFIC]);
+  });
+
+  it('reveals one more level per request, in order', () => {
+    assert.deepEqual(
+      guidanceModule.buildGuidancePicks(report, 1).map((pick) => pick.label),
+      ['backoff', 'Hints', report.hints[0], '', guidanceModule.MORE_SPECIFIC],
+    );
+    assert.deepEqual(
+      guidanceModule.buildGuidancePicks(report, 2).map((pick) => pick.label),
+      ['backoff', 'Hints', report.hints[0], report.hints[1]],
+    );
+  });
+
+  it('stops offering more once the last level is out', () => {
+    const picks = guidanceModule.buildGuidancePicks(report, 2);
+    assert.equal(picks.some((pick) => pick.label === guidanceModule.MORE_SPECIFIC), false);
+  });
+
+  it('never offers a level the model did not give', () => {
+    const picks = guidanceModule.buildGuidancePicks({ ...report, hints: [] });
+    assert.equal(picks.some((pick) => pick.label === guidanceModule.MORE_SPECIFIC), false);
+  });
+});
+
+describe('What Was It Called? (SPEC §9)', () => {
+  const candidate = {
+    name: 'Array.prototype.reduce',
+    signature: 'reduce(callbackFn, initialValue?)',
+    concept: 'Folds an array into one value.',
+    search: 'MDN Array reduce',
+  };
+
+  beforeEach(() => {
+    fake.reset();
+    for (const name of API_KEY_VARS) {
+      delete process.env[name];
+    }
+    extension.activate(fake.makeExtensionContext() as never);
+  });
+
+  it('shows names and nothing else in the first list', () => {
+    const picks = recallModule.buildNamePicks({
+      status: 'answered',
+      candidates: [candidate, { name: 'Array.prototype.flatMap' }],
+      notes: [],
+    });
+    assert.deepEqual(picks.map((pick) => [pick.label, pick.description]), [
+      ['Array.prototype.reduce', undefined],
+      ['Array.prototype.flatMap', undefined],
+    ]);
+  });
+
+  it('gives back the name alone until the developer asks for more', () => {
+    const picks = recallModule.buildCandidatePicks(candidate);
+    assert.deepEqual(picks.map((pick) => pick.label), [guidanceModule.MORE_SPECIFIC]);
+  });
+
+  it('climbs the rungs in SPEC §9 order, one per request', () => {
+    assert.deepEqual(
+      recallModule.buildCandidatePicks(candidate, 1).map((pick) => pick.label),
+      [candidate.signature, '', guidanceModule.MORE_SPECIFIC],
+    );
+    assert.deepEqual(
+      recallModule.buildCandidatePicks(candidate, 2).map((pick) => pick.label),
+      [candidate.signature, candidate.concept, '', guidanceModule.MORE_SPECIFIC],
+    );
+    const all = recallModule.buildCandidatePicks(candidate, 3);
+    assert.deepEqual(all.map((pick) => pick.label), [
+      candidate.signature,
+      candidate.concept,
+      'Documentation',
+      candidate.search,
+    ]);
+    assert.equal(all[3].search, candidate.search);
+  });
+
+  it('offers nothing at all for a candidate that is only a name', () => {
+    assert.deepEqual(recallModule.buildCandidatePicks({ name: 'fetch' }), []);
+  });
+
+  it('stops for a missing API key instead of calling out', async () => {
+    fake.recorded.inputBoxAnswers.push('folds an array into one value');
+    await fake.commands.executeCommand('navigator.recallName');
+    assert.equal(fake.recorded.quickPicks.length, 0);
+    assert.match(fake.recorded.warnings[0], /no Anthropic API key/);
+  });
+
+  it('asks nothing when the question is dismissed', async () => {
+    fake.recorded.inputBoxAnswers.push(undefined);
+    await fake.commands.executeCommand('navigator.recallName');
+    assert.deepEqual(fake.recorded.quickPicks, []);
+    assert.deepEqual(fake.recorded.warnings, []);
+  });
+});
+
+describe('documentation links come from the index (SPEC §10)', () => {
+  const report = {
+    status: 'answered' as const,
+    topics: [{ name: 'AbortSignal' }],
+    searches: ['MDN AbortSignal', 'some framework thing'],
+    hints: [],
+    explore: [],
+    notes: [],
+  };
+  const links = new Map([
+    [
+      'MDN AbortSignal',
+      {
+        term: 'MDN AbortSignal',
+        title: 'AbortSignal',
+        url: 'https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal',
+      },
+    ],
+  ]);
+
+  it('shows every term, resolved or not', () => {
+    const labels = guidanceModule.buildGuidancePicks(report, 0, links).map((pick) => pick.label);
+    for (const term of report.searches) {
+      assert.ok(labels.includes(term), `${term} was hidden`);
+    }
+  });
+
+  it('attaches a URL only where the index gave one', () => {
+    const picks = guidanceModule.buildGuidancePicks(report, 0, links);
+    const resolved = picks.find((pick) => pick.label === 'MDN AbortSignal');
+    const unresolved = picks.find((pick) => pick.label === 'some framework thing');
+    assert.equal(resolved?.url, 'https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal');
+    assert.equal(resolved?.description, 'AbortSignal');
+    assert.equal(unresolved?.url, undefined);
+    assert.equal(unresolved?.search, 'some framework thing');
+  });
+
+  it('shows no URL at all when the index answered nothing', () => {
+    const picks = guidanceModule.buildGuidancePicks(report);
+    assert.deepEqual(picks.filter((pick) => pick.url !== undefined), []);
+  });
+
+  it('never invents a link for a term the model produced', () => {
+    const withUrlInTerm = { ...report, searches: ['https://example.invalid/made/up'] };
+    const picks = guidanceModule.buildGuidancePicks(withUrlInTerm, 0, links);
+    assert.deepEqual(picks.filter((pick) => pick.url !== undefined), []);
+  });
+});
+
+describe('documentation exploration (SPEC §21.6)', () => {
+  const report = {
+    status: 'answered' as const,
+    topics: [{ name: 'AbortSignal' }],
+    searches: [],
+    hints: ['The deadline and the retry are different clocks.'],
+    explore: ['AbortController', 'Promise.any()', 'Retry-After'],
+    notes: [],
+  };
+
+  it('is not shown to a developer who stopped at the topics', () => {
+    const labels = guidanceModule.buildGuidancePicks(report).map((pick) => pick.label);
+    for (const name of report.explore) {
+      assert.equal(labels.includes(name), false, `${name} was presented, not reached`);
+    }
+  });
+
+  it('is not shown at the hint levels either', () => {
+    const labels = guidanceModule.buildGuidancePicks(report, 1).map((pick) => pick.label);
+    assert.equal(labels.includes('AbortController'), false);
+    assert.ok(labels.includes(guidanceModule.MORE_SPECIFIC), 'one rung should remain');
+  });
+
+  it('arrives as the last rung, under its own heading, and is searchable', () => {
+    const picks = guidanceModule.buildGuidancePicks(report, 2);
+    const labels = picks.map((pick) => pick.label);
+    assert.ok(labels.includes('You may want to explore'));
+    for (const name of report.explore) {
+      const pick = picks.find((entry) => entry.label === name);
+      assert.equal(pick?.search, name);
+    }
+    assert.equal(labels.includes(guidanceModule.MORE_SPECIFIC), false, 'that was the last rung');
+  });
+
+  it('adds no rung when the model offered nothing adjacent', () => {
+    const bare = { ...report, explore: [] };
+    assert.equal(guidanceModule.disclosureSteps(bare), 1);
+    assert.equal(guidanceModule.disclosureSteps(report), 2);
+  });
+
+  it('is reachable even when there were no hints at all', () => {
+    const noHints = { ...report, hints: [] };
+    assert.equal(guidanceModule.disclosureSteps(noHints), 1);
+    const labels = guidanceModule.buildGuidancePicks(noHints, 1).map((pick) => pick.label);
+    assert.ok(labels.includes('You may want to explore'));
+  });
+});
+
+describe('the editor selection as context (issue #24)', () => {
+  beforeEach(() => {
+    fake.reset();
+    for (const name of API_KEY_VARS) {
+      delete process.env[name];
+    }
+    fake.window.activeTextEditor = undefined;
+    extension.activate(fake.makeExtensionContext() as never);
+  });
+
+  after(() => {
+    fake.window.activeTextEditor = undefined;
+  });
+
+  it('tells the developer what is going with the question, before they type it', async () => {
+    fake.recorded.workspaceFolders = [{ uri: { fsPath: '/repo' }, name: 'w', index: 0 }];
+    fake.window.activeTextEditor = fake.fakeEditor(
+      '/repo/src/a.ts',
+      'async function load(url) {\n  return await fetch(url);\n}',
+      12,
+    );
+    fake.recorded.inputBoxAnswers.push(undefined);
+    await fake.commands.executeCommand('navigator.whereToLook');
+    // Dismissed at the input box: nothing was sent, and nothing was asked for.
+    assert.deepEqual(fake.recorded.quickPicks, []);
+  });
+
+  it('sends nothing when nothing is selected', () => {
+    fake.window.activeTextEditor = fake.fakeEditor('/repo/src/a.ts', '');
+    assert.equal(selectionModule.readSelection(), undefined);
+  });
+
+  it('has no editor to read when none is open', () => {
+    fake.window.activeTextEditor = undefined;
+    assert.equal(selectionModule.readSelection(), undefined);
+  });
+
+  it('reads the selection relative to the workspace', () => {
+    fake.recorded.workspaceFolders = [{ uri: { fsPath: '/repo' }, name: 'w', index: 0 }];
+    fake.window.activeTextEditor = fake.fakeEditor('/repo/src/a.ts', 'const a = 1;\nconst b = 2;', 12);
+    const read = selectionModule.readSelection();
+    assert.equal(read?.summary, 'src/a.ts:12-13 (2 lines)');
+    assert.match(read.context, /const a = 1;/);
+  });
+
+  it('shows what was sent alongside the answer, and it cannot be picked', () => {
+    const picks = guidanceModule.buildGuidancePicks(
+      { status: 'answered', topics: [{ name: 'backoff' }], searches: [], hints: [], explore: [], notes: [] },
+      0,
+      new Map(),
+      'src/a.ts:12-14 (3 lines)',
+    );
+    assert.equal(picks[0].label, 'Context: src/a.ts:12-14 (3 lines)');
+    assert.equal(picks[0].kind, fake.QuickPickItemKind.Separator);
   });
 });

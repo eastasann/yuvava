@@ -54,7 +54,18 @@ const FORBIDDEN_WRITE_APIS: ReadonlyArray<{ readonly label: string; readonly pat
   { label: 'document.save', pattern: /\.save\s*\(/ },
 ];
 
-/** Contribution points through which VS Code would offer to change code. */
+/**
+ * Contribution points through which VS Code would offer to change code.
+ *
+ * Hover is deliberately *not* on this list. Every provider below exists to
+ * produce an edit — a code action, a completion, a formatting result, a
+ * rename, a pre-save mutation — and `vscode.Hover` cannot: it carries a
+ * `MarkdownString` and a range, and has no member that reaches a document.
+ * Navigator registers exactly one hover provider, in `src/vscode/hover.ts`,
+ * to give SPEC §8 a way in from a diagnostic. The test below pins that it is
+ * the only provider of any kind, so allowing hover cannot quietly become
+ * allowing others.
+ */
 const FORBIDDEN_PROVIDERS: ReadonlyArray<{ readonly label: string; readonly pattern: RegExp }> = [
   { label: 'code action provider', pattern: new RegExp(['registerCode', 'ActionsProvider'].join('')) },
   { label: 'code action kind', pattern: new RegExp(['CodeAction', 'Kind'].join('')) },
@@ -99,6 +110,32 @@ describe('Navigator cannot modify user source code', () => {
       (file) => file.path.startsWith('src/core/') && /from '(?:node:)?vscode'|require\('vscode'\)/.test(file.text),
     ).map((file) => file.path);
     assert.deepEqual(offenders, []);
+  });
+
+  it('registers no provider other than the one hover provider', () => {
+    const registrations = SOURCES.flatMap((file) =>
+      [...file.text.matchAll(/vscode\.languages\.register(\w+)/g)].map((match) => match[1]),
+    );
+    assert.deepEqual(registrations, ['HoverProvider']);
+  });
+
+  it('offers only the go-deeper command from a hover, and only as a link', () => {
+    const hover = SOURCES.find((file) => file.path === 'src/vscode/hover.ts');
+    assert.ok(hover, 'the hover provider is missing');
+    // A trusted MarkdownString can invoke commands. This one names the single
+    // command it is allowed to invoke, so widening it is a visible change.
+    assert.match(hover.text, /isTrusted = \{ enabledCommands: \[GO_DEEPER_COMMAND\] \}/);
+    const commandLinks = [...hover.text.matchAll(/command:([^?)\s]+)/g)].map((match) => match[1]);
+    assert.deepEqual(commandLinks, ['${GO_DEEPER_COMMAND}']);
+  });
+
+  it('reads the editor selection and never writes through it', () => {
+    const selection = SOURCES.find((file) => file.path === 'src/vscode/selection.ts');
+    assert.ok(selection, 'the selection reader is missing');
+    // `TextEditor` offers `edit` alongside `selection`. This pins that the one
+    // file allowed near an editor calls only the reading member.
+    const members = [...selection.text.matchAll(/\.(\w+)\s*\(/g)].map((match) => match[1]);
+    assert.deepEqual([...new Set(members)].sort(), ['asRelativePath', 'getText']);
   });
 
   it('publishes findings only as diagnostics', () => {

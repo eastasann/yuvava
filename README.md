@@ -18,14 +18,30 @@ for why it is built the way it is.
 - `Navigator: Review Current Changes` reviews your working-tree diff, including
   new files git is not tracking yet (`.gitignore` is honoured, and nothing is
   ever staged to make them visible).
+- `Navigator: Where Should I Look?` takes what you are trying to do — plus
+  whatever you have selected, if anything — and names
+  what it involves — the APIs, the concepts, the decisions — plus the words to
+  search for. It does not answer the question. If that is not enough, **More
+  specific** opens one more level of hint at a time, and never on its own.
+  Search terms that MDN recognises become links; the rest stay terms you can
+  search yourself. Navigator never shows a link a model wrote. Past the last
+  hint there is one more step — a few adjacent things worth stumbling over,
+  which you only see if you get that far.
+- `Navigator: What Was It Called?` gives back a name you have forgotten but
+  would recognise. The name comes on its own; the signature, the one-line
+  meaning and the documentation are each one more step you have to take.
 - Real problems show up as **diagnostics** in the editor and the Problems panel:
   correctness bugs, missed edge cases, unhandled null/undefined, error handling
   gaps, and — at higher intensity — concurrency, security and performance risks.
+- Hovering an observation offers **Go deeper** — one hint at a time about that
+  observation, and never the answer.
 - When there is nothing worth saying, it says nothing.
 
 ## What it deliberately does not do
 
 - It does not generate implementation code, patches or replacement snippets.
+  A hint may show a signature, or the shape of a construct with the decision
+  left out — never anything that would run as written.
 - It does not offer Quick Fixes, autocomplete, or "apply this change".
 - It does not write to your files. The extension has no code path that can:
   `test/invariant.test.ts` fails the build if one is ever introduced.
@@ -93,6 +109,9 @@ from the VS Code command palette.
 | Command | What it does |
 | --- | --- |
 | `Navigator: Review Current Changes` | Reviews the working tree against `navigator.diffBase`. |
+| `Navigator: Where Should I Look?` | Names what a task involves, and what to search for. Answers nothing. |
+| `Navigator: What Was It Called?` | Gives back a forgotten name. Signature, meaning and docs only if you ask. |
+| `Navigator: Go Deeper` | Opens one more level of hint about the observation under the cursor. |
 | `Navigator: Clear Observations` | Removes Navigator's diagnostics. |
 | `Navigator: Set API Key` | Stores the active provider's API key in secret storage. |
 | `Navigator: Clear API Key` | Removes the active provider's stored key. |

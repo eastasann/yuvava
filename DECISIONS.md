@@ -310,3 +310,326 @@ Carrying two SDKs so one can be used is the obvious waste. Bundling with
 esbuild, or `await import()`ing only the selected provider, are both easy
 levers — worth pulling if download size or activation time ever matters, and
 not before.
+
+## Decision: The way in is a question box and a QuickPick, not a panel
+
+`Navigator: Where Should I Look?` asks one question in an input box, and shows
+the answer in a QuickPick that Escape closes. Nothing is persisted, and there
+is no thread to continue.
+
+Reason:
+SPEC §8, §9 and §10 all need somewhere for the developer to say what they are
+trying to do, and every obvious surface for that is a chat panel — which SPEC
+§12.3 rejects outright, because "ask the AI" is the relationship the product
+exists to avoid. A QuickPick is the same VS Code primitive as Go to Symbol: it
+appears, it is read, it is gone. The absence of history is the feature.
+
+Consequences:
+- The command is `navigator.whereToLook`. Command ids and titles are checked by
+  `test/invariant.test.ts` against apply/fix/generate/complete/refactor/rewrite/
+  accept/patch/implement, and a new command has to stay clear of all of them.
+- The answer is topics plus search terms, and nothing else. The schema
+  (`src/core/guidanceSchema.ts`) has two fields, neither of which can hold code
+  or a link, and both go through the label sanitiser on the way back.
+- Guidance needs no git and no workspace folder, so unlike the review command it
+  runs with a folder-less window.
+
+## Decision: Navigator never displays a URL a model produced
+
+Model output is stripped of URLs in `sanitizeLabel`, and the guidance schema has
+no link field. Links, when they exist at all, come from an index.
+
+Reason:
+Models emit plausible URLs that 404 at a meaningful rate, and section anchors
+are worse — documentation gets reorganised after the training cut-off. The
+guarantee worth having is "it appeared as a link, so it exists". One invented
+link destroys that for every real one.
+
+Consequence:
+Search *terms* are always shown, resolved or not, so the developer can always
+run the search themselves (SPEC §10.3). A term that could not be turned into a
+link is still useful; a link that does not resolve is worse than nothing.
+
+## Decision: A search term opens a plain web search, on DuckDuckGo
+
+`src/core/search.ts`, one function.
+
+Reason:
+SPEC §10 wants the developer taken to the documentation rather than read it
+aloud to, and §10.3 wants what they find on the way left intact. A results page
+does both: they see the whole page, not the one link Navigator would have
+picked. DuckDuckGo needs no account and no key, which keeps this from becoming
+another thing to configure.
+
+When to revisit:
+If it ever needs to be configurable, it is one setting and one constant. It is
+not one today because nobody has asked.
+
+## Decision: Navigator's own UI strings stay in English
+
+`SPEC.md`, `LOOP.md` and the issues are written in Japanese; every string the
+extension shows a user is English, including the ones specified in Japanese in
+issue #5 (`Navigator: 調べています` became `Navigator: looking`).
+
+Reason:
+The extension already had a dozen user-facing strings, all English, and the
+owner shipped them. One Japanese string among them is not localisation, it is
+an inconsistency. Doing it properly means `l10n` bundles for every string at
+once, which is a real feature nobody has asked for.
+
+What was actually specified in issue #5 was the *wording discipline* — no
+emoji, no lecturing, name the topic and let the description be short — and that
+is what the QuickPick does.
+
+## Decision: A hint may show a hole, never a fix — and that is a mechanical test
+
+`src/core/hintSanitize.ts` allows a code fragment through the hint path. Three
+kinds, from SPEC §8 and §9:
+
+| | Example | Allowed |
+| --- | --- | --- |
+| a. a signature | `reduce(callbackFn, initialValue?)` | yes — SPEC §9 asks for it |
+| b. a skeleton with the decision left out | `try { … } catch (e) { /* which failures are worth retrying? */ }` | yes |
+| c. code that would run as written | an implementation | no |
+
+The test for c is not a judgement about intent, it is structural: a fragment is
+kept only if it is a bare signature, **or if it still has a hole** — an
+ellipsis, a standalone `...`, or a comment containing a question mark. Working
+code has none of those. What survives is then flattened to one line, capped at
+6 lines and 200 characters before flattening, and only the first fragment in a
+hint is considered.
+
+Reason:
+SPEC §8 says even Level 3 does not present finished code, and its own examples
+are prose. But a hint that may not show the *shape* of a construct often cannot
+be given at all, and §9 names a signature as the second rung of recall. The
+question was where the line falls, and "does the developer still have something
+to work out?" is the only version of it that can be checked by a program.
+
+Why not a stricter rule:
+Refusing every fragment is what the review path does, and it makes §9 Level 1
+impossible to express. Why not a looser one: anything without a hole is a fix,
+and handing over a fix is the one thing this product exists not to do.
+
+Consequences:
+- **The review path is untouched.** `anchor.ts` still calls `sanitizeMessage`,
+  which still strips every fence and every statement-shaped line.
+  `test/hintSanitize.test.ts` runs each of a, b and c through *both* sanitisers
+  and asserts the review one destroys all three. Do not merge the two.
+- A spread operator (`{ ...rest }`) does not count as a hole, or every object
+  literal would qualify. `...` only counts standing alone.
+- The prompt tells the model that a runnable fragment is thrown away, so the
+  cost of writing one is the whole hint. That is prompt-level encouragement of
+  a rule the code enforces regardless.
+
+## Decision: Hints are revealed one at a time, and only by asking
+
+The guidance QuickPick shows topics (SPEC §8 Level 0). `More specific` appends
+the next hint and reopens the list. Nothing advances on its own, and closing
+the QuickPick discards the position.
+
+Reason:
+SPEC §8's purpose is the loop `Hint -> Human thinks -> Human solves`. A
+disclosure that advances on a timer, on hover, or all at once is just an answer
+delivered in instalments. The developer choosing to go deeper is the part that
+matters, so it is the only thing that moves the level.
+
+Consequence:
+All the levels arrive in one response, so revealing them costs no extra API
+call — the gate is entirely in the UI. That is deliberate: a per-level request
+would make hesitation expensive, and hesitation is the behaviour being
+protected.
+
+## Decision: Recall enforces "no usage examples" by field, not by prompt
+
+`src/core/recallSchema.ts` validates each of SPEC §9's rungs with a different
+sanitiser, chosen for what that rung is allowed to be:
+
+| Field | Sanitiser | Effect |
+| --- | --- | --- |
+| `name` | `sanitizeLabel` | no code, no URL |
+| `signature` | `sanitizeLabel`, then `isSignature` | anything that is not a signature is dropped |
+| `concept` | `sanitizeMessage` (the review one) | no code survives at all |
+| `search` | `sanitizeLabel` | no code, no URL |
+
+Reason:
+SPEC §9's whole point is that the developer retrieves the knowledge from their
+own memory, and a usage example is what stops that from happening — it is
+copyable, so there is nothing left to remember. Asking the model not to write
+one is not a guarantee. A usage example is not signature-shaped, and it does
+not survive the review sanitiser, so there is no field it can arrive in.
+
+Consequence:
+A model that answers `signature` with `const total = items.reduce(...)` loses
+that rung entirely rather than having it shown: the developer sees the name and
+the concept, and the log says a signature was dropped. That is the right
+failure — a missing rung costs one step, a usage example costs the exercise.
+
+## Decision: One provider object, one method per job
+
+`ReviewProvider.review`, `GuidanceProvider.guide`, `RecallProvider.recall`, all
+implemented by the same two classes and composed as `NavigatorProvider`. There
+is no general "ask the model anything" method.
+
+Reason:
+Every prompt and every schema stays on Navigator's side of the seam. A generic
+`complete(system, user, schema)` would be less code and would put the ability to
+ask a model an arbitrary question into `src/vscode/`, one call site away from
+"and now paste the answer into the editor". The seam is a constraint, not just
+an abstraction, so it is shaped by what Navigator is allowed to do rather than
+by what an HTTP client naturally offers.
+
+Consequence:
+A new job is a new method on both providers plus a prompt and a schema — about
+thirty lines. That is the intended cost. Each provider keeps one private
+request path (`ask` / `run`), so the wire format is written once.
+
+## Decision: A hover provider is allowed, and it is the only provider there will be
+
+`src/vscode/hover.ts` registers a hover provider over Navigator's own
+observations. Code action, completion, inline completion, formatting, rename
+and on-will-save providers stay banned, and `test/invariant.test.ts` now pins
+that hover is the *only* provider of any kind that Navigator registers.
+
+Reason:
+The banned six all exist to produce an edit. `vscode.Hover` cannot: it is a
+`MarkdownString` and a range, with no member that reaches a document. The
+distinction the invariant is drawing is "can this change a file", not "is this
+a provider", and stating it that way is more honest than a list that happens
+not to contain hover yet.
+
+Why it earns its place:
+VS Code already renders a diagnostic's message on hover, so a hover that
+repeated it would be pure noise. What this one adds is the entry to SPEC §8 —
+one link, `Go deeper`, which asks for a hint about that observation and opens
+the same one-at-a-time disclosure the guidance command uses.
+
+Guards:
+- The `MarkdownString` is trusted, which is what lets a command link work at
+  all, but it names the single command it may invoke
+  (`isTrusted: { enabledCommands: [GO_DEEPER_COMMAND] }`). The invariant test
+  asserts both that line and that the file contains exactly one command link.
+- The link carries the observation's file and line, never its content.
+
+## Decision: Going deeper reuses the guidance path rather than growing a fourth
+
+`Navigator: Go Deeper` builds a question out of the observation plus the hunk
+it was found in (`src/core/observationHints.ts`) and sends it through
+`runGuidance`.
+
+Reason:
+"I have been told what is wrong and I want to work it out myself" is the same
+request as "where should I look", and it wants the same answer shape: things
+involved, hints that narrow one step at a time, terms to search. A fourth
+prompt and schema would have had to say all the same things, and would have
+been a second place for the hint rules to drift.
+
+Consequence:
+The observation the developer has already read is Level 0, so this path opens
+with the first hint already revealed, where the guidance command starts at zero.
+
+## Decision: The last review is remembered in memory, and that is not history
+
+`src/vscode/observationStore.ts` holds the last review's observations and diff
+files so the hover knows what is under the cursor. Each review replaces the
+last, `Clear Observations` empties it, and a window reload starts blank.
+
+Reason:
+The hover needs to answer "which observation is this line" without re-running
+anything. Nothing is written to disk, and nothing accumulates — this is not
+review history (which stays unbuilt; see its own entry), and it should not
+become the place someone adds it.
+
+## Decision: The documentation index is MDN's search API, and only that
+
+`src/core/docsIndex.ts` resolves a search term through
+`https://developer.mozilla.org/api/v1/search`, takes the first result's title
+and `mdn_url`, and shows nothing when there is no match. This is the decision
+issue #8 left open.
+
+Alternatives considered:
+- **A general search API** (Brave, Google CSE): covers everything, and costs an
+  API key, a setting, a quota and a second failure mode — for a tool with one
+  user, whose questions are mostly about the web platform anyway.
+- **Scraping**: breaks, silently, at someone else's convenience.
+- **A bundled table of links**: goes stale in the repository, which is worse
+  than going stale on a server.
+
+Why MDN:
+Free, no key, authoritative for what it covers, and its coverage — the web
+platform and JavaScript — is most of what "what is this called" is about. What
+it does not cover degrades to a search term, which is what SPEC §10.3 wanted
+shown regardless.
+
+Guards:
+- `mdnDocumentUrl` refuses anything that is not an MDN document path, so a
+  changed or hostile response cannot become a link somewhere else.
+- 2-second timeout, resolved in parallel, at most three links (SPEC §10.2).
+  Every failure — offline, proxied, rate-limited, malformed — is silent and
+  costs nothing: the term is still there.
+- MDN's `summary` field is available and deliberately unused. Summarising the
+  page is what SPEC §10.3 asks Navigator not to do, and the test says so.
+
+When to revisit:
+When a real session produces a run of terms MDN cannot resolve, and the pattern
+in them says which index would have. Not before — that is the measurement, and
+guessing at it is how the setting gets added for nothing.
+
+## Decision: Adjacent things are the last rung of the disclosure, not a section
+
+SPEC §21.6's "You may want to explore" list appears only in the guidance
+QuickPick, only after the developer has exhausted the hints, and never on its
+own. It is `More specific` one more time.
+
+Reason:
+§21.6 asks for two things that pull against each other: the discovery should be
+*serendipitous*, and the frequency should be *low* so it does not break
+concentration. A dedicated command would be neither — nothing is accidental
+about running it. A section shown by default would be the wrong half: seen
+every time, and read as part of the answer.
+
+The last rung gets both. The developer asked for "more", not for "adjacent
+things", so what arrives is unasked-for in the way that matters; and they only
+get there by having already read everything else, which is exactly the moment
+when a glance sideways costs nothing.
+
+Consequences:
+- A developer who stopped at the topics never sees it. That is correct: it is
+  the least important thing Navigator has to say.
+- It is names only, each one searchable. No explanations — explaining an
+  adjacent API is how a discovery becomes a lecture (SPEC §18.5).
+- Something already named as a topic is dropped from it; repeating the answer
+  back is not a discovery.
+- It never appears in the review path, where an interruption costs most.
+
+## Decision: A selection is sent as context; no selection sends nothing
+
+`Navigator: Where Should I Look?` includes the editor selection when there is
+one. When there is not, it sends the question alone — it does not fall back to
+the lines around the cursor.
+
+Reason:
+"Add a retry to this" is a far better question when *this* was pointed at, and
+selecting is work the developer has usually already done. But a cursor-line
+guess would attach context to *every* question, silently and with no shape the
+developer can see. A selection is a deliberate act; a cursor position is where
+they happened to stop typing.
+
+What is told, and when:
+- The input box says what is going with the question **before** it is typed:
+  "Sending src/a.ts:12-40 (29 lines) with it." Nothing leaves the editor that
+  the developer was not shown first.
+- The QuickPick repeats it as a non-selectable separator, where the answer is
+  read.
+- The log records it.
+
+Caps:
+200 lines or 4000 characters, whichever comes first, and the summary says
+"first N lines" when it cut. A whitespace-only selection sends nothing, so a
+stray click cannot attach a character to the question.
+
+Invariant:
+`src/vscode/selection.ts` is the only file that touches a `TextEditor`, and
+`TextEditor` offers `edit` right next to `selection`. `test/invariant.test.ts`
+pins the exact set of members that file calls — `getText` and
+`asRelativePath` — so an edit path there cannot appear quietly.
