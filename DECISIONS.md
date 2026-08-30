@@ -311,6 +311,16 @@ esbuild, or `await import()`ing only the selected provider, are both easy
 levers — worth pulling if download size or activation time ever matters, and
 not before.
 
+Asked again and answered the same way (issue #21, closed not planned). The
+package is 6.94 MB across 5,527 files, of which Navigator's own compiled
+output is 152 KB. That ratio is embarrassing and costs nothing: the extension
+is installed from a local file, so there is no download, and the SDKs load
+when a command runs rather than at activation, so there is no startup cost
+either. Bundling would add a build step and a class of failure — SDKs that
+require lazily do not always survive tree-shaking — to fix a number nobody is
+paying. The trigger stands: a measured cost in download time or activation
+time. Not the number itself.
+
 ## Decision: The way in is a question box and a QuickPick, not a panel
 
 `Navigator: Where Should I Look?` asks one question in an input box, and shows
