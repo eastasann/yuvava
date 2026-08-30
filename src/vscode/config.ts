@@ -5,6 +5,8 @@ export interface NavigatorConfig {
   readonly provider: ProviderKind;
   /** Blank means "this provider's default model". */
   readonly model: string;
+  /** Blank means OpenAI itself; set for an OpenAI-compatible endpoint. */
+  readonly openaiBaseUrl: string;
   readonly intensity: ReviewIntensity;
   readonly diffBase: string;
   readonly includeUntracked: boolean;
@@ -26,6 +28,7 @@ export function readConfig(scope?: vscode.Uri): NavigatorConfig {
   return {
     provider: oneOf(section.get('provider'), PROVIDER_KINDS, 'anthropic'),
     model: section.get<string>('model', '').trim(),
+    openaiBaseUrl: section.get<string>('openaiBaseUrl', '').trim(),
     intensity: oneOf(section.get('reviewIntensity'), REVIEW_INTENSITIES, 'normal'),
     diffBase: section.get<string>('diffBase', 'HEAD').trim() || 'HEAD',
     includeUntracked: section.get<boolean>('includeUntracked', true) !== false,

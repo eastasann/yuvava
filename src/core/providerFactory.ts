@@ -49,6 +49,8 @@ export interface CreateProviderOptions {
   readonly apiKey: string;
   /** Empty or blank means "use this provider's default model". */
   readonly model?: string;
+  /** OpenAI-compatible endpoint. Ignored by providers that have no such notion. */
+  readonly baseUrl?: string;
   readonly fetch?: typeof globalThis.fetch;
 }
 
@@ -60,6 +62,6 @@ export function createReviewProvider(options: CreateProviderOptions): ReviewProv
     ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
   };
   return options.kind === 'openai'
-    ? new OpenAIReviewProvider(shared)
+    ? new OpenAIReviewProvider({ ...shared, baseUrl: options.baseUrl })
     : new AnthropicReviewProvider(shared);
 }

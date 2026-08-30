@@ -104,6 +104,7 @@ from the VS Code command palette.
 | --- | --- | --- |
 | `navigator.provider` | `anthropic` | `anthropic` (Claude) or `openai` (GPT / Codex). |
 | `navigator.model` | *(provider default)* | `claude-opus-5` or `gpt-5.1-codex-max` unless set. |
+| `navigator.openaiBaseUrl` | *(empty)* | An OpenAI-compatible endpoint to use instead of OpenAI. |
 | `navigator.reviewIntensity` | `normal` | `silent`, `normal` or `strict` (SPEC §15). |
 | `navigator.diffBase` | `HEAD` | Revision the working tree is compared against. |
 | `navigator.includeUntracked` | `true` | Also review new, untracked files. |
@@ -118,6 +119,32 @@ one reviews changes who is looking over your shoulder — it changes nothing
 about what Navigator is allowed to do with the answer, and
 `test/providerFactory.test.ts` checks that a replacement implementation is
 stripped whichever provider returns it.
+
+## Using another endpoint
+
+`navigator.openaiBaseUrl` points the OpenAI provider at anything that speaks
+the OpenAI API — a free tier, or a model on your own machine:
+
+```jsonc
+// Groq
+"navigator.provider": "openai",
+"navigator.openaiBaseUrl": "https://api.groq.com/openai/v1",
+"navigator.model": "llama-3.3-70b-versatile",
+
+// Ollama, locally — nothing leaves the machine
+"navigator.openaiBaseUrl": "http://localhost:11434/v1",
+"navigator.model": "qwen2.5-coder:14b",
+```
+
+Setting it switches the request to `/chat/completions`, which is what those
+services implement; OpenAI itself keeps using the Responses API. If the
+endpoint rejects the JSON schema, Navigator retries once without it and
+validates the answer locally — the fallback is noted in the log.
+
+> **Your diff is sent to whatever you point this at.** Free tiers commonly
+> train on the data they receive; check the provider's terms. Navigator is a
+> personal learning tool and does not manage this for you — where your code
+> goes is your decision. Point it at a local model if that matters.
 
 ## Development
 

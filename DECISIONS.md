@@ -180,6 +180,45 @@ Consequences:
   with a fenced replacement implementation — through both providers and asserts
   the code is stripped either way.
 
+## Decision: A configured base URL switches to Chat Completions
+
+`navigator.openaiBaseUrl` points the OpenAI provider at any OpenAI-compatible
+service. Setting it does not merely change the host — it changes the request to
+`/chat/completions`.
+
+Reason:
+The Responses API is OpenAI-only. Groq, Cerebras, Ollama, LM Studio and
+OpenRouter implement Chat Completions, so a base URL alone would have produced
+a 404 against every one of them. Two paths in one provider is the cost of the
+feature actually working.
+
+Structured-output support varies across these services, so a rejected schema
+falls back once to a plain request. `parseReviewResponse` already tolerates
+JSON wrapped in prose or a fence, so the answer is still validated the same
+way; the fallback surfaces as a note in the log rather than silently.
+
+Consequence:
+Error messages in this provider name no vendor — "the API key was rejected",
+not "the OpenAI API key was rejected" — because the endpoint may be Groq or a
+process on localhost. The log line above names the provider and base URL.
+
+## Decision: Where the diff goes is the user's decision
+
+Navigator sends the diff to whatever endpoint is configured, and does not
+police that choice beyond saying so in the setting description and the README.
+
+Reason:
+Navigator is a personal learning tool (`SPEC.md` §3). Free tiers commonly train
+on what they receive, which matters, but the person choosing the endpoint is
+the person whose code it is. Building data-governance controls into a tool with
+one user would be a configuration system for a decision the user already makes
+by typing a URL.
+
+Consequence:
+The warning belongs where the choice is made — the `navigator.openaiBaseUrl`
+description and the README — not in a policy the extension enforces. A local
+endpoint is the answer for anyone who needs the guarantee.
+
 ## Decision: OpenAI reviews go through the Responses API
 
 `client.responses.create` with `text.format` as a strict `json_schema`, and

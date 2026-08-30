@@ -194,7 +194,7 @@ describe('OpenAIReviewProvider responses', () => {
     );
   });
 
-  it('explains a rejected API key', async () => {
+  it('explains a rejected API key without naming a vendor', async () => {
     const provider = providerReturning(
       jsonResponse({ error: { message: 'invalid key', type: 'invalid_request_error' } }, 401),
     );
@@ -202,7 +202,7 @@ describe('OpenAIReviewProvider responses', () => {
       () => provider.review(REQUEST),
       (error: unknown) => {
         assert.ok(error instanceof ReviewUnavailableError);
-        assert.match(error.message, /OpenAI API key was rejected/);
+        assert.match(error.message, /API key was rejected/);
         return true;
       },
     );
@@ -215,7 +215,7 @@ describe('OpenAIReviewProvider responses', () => {
     await assert.rejects(
       () => provider.review(REQUEST),
       (error: unknown) => {
-        assert.match((error as Error).message, /rate limited by the OpenAI API/);
+        assert.match((error as Error).message, /rate limited by the endpoint/);
         return true;
       },
     );
@@ -226,7 +226,7 @@ describe('OpenAIReviewProvider responses', () => {
     await assert.rejects(
       () => provider.review(REQUEST),
       (error: unknown) => {
-        assert.match((error as Error).message, /could not reach the OpenAI API/);
+        assert.match((error as Error).message, /could not reach the endpoint/);
         return true;
       },
     );
@@ -238,7 +238,7 @@ describe('OpenAIReviewProvider responses', () => {
       () => provider.review(REQUEST),
       (error: unknown) => {
         assert.ok(error instanceof ReviewUnavailableError);
-        assert.match(error.message, /OpenAI API error 500/);
+        assert.match(error.message, /API error 500/);
         return true;
       },
     );
