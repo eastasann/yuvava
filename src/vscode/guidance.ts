@@ -24,22 +24,52 @@ const TRANSIENT_MESSAGE_MS = 4000;
 
 let guidanceInFlight = false;
 
-/** A pick that opens a web search. Anything else is there to be read. */
+/** SPEC §8: the label on the only thing that advances the disclosure. */
+export const MORE_SPECIFIC = 'More specific';
+
+/**
+ * A pick that opens a web search, one that reveals the next hint, or — most
+ * of them — one that is simply there to be read.
+ */
 interface GuidancePick extends vscode.QuickPickItem {
   readonly search?: string;
+  readonly more?: true;
 }
 
-export function buildGuidancePicks(report: GuidanceReport): GuidancePick[] {
+/**
+ * Renders the guidance at the current level of disclosure.
+ *
+ * `revealed` is how many hints the developer has asked for; it starts at zero
+ * and only ever grows by their choosing `More specific`. SPEC §8 is about
+ * keeping `Hint -> Human thinks -> Human solves` intact, so nothing here
+ * advances on its own.
+ */
+export function buildGuidancePicks(report: GuidanceReport, revealed = 0): GuidancePick[] {
   const picks: GuidancePick[] = report.topics.map((topic) => ({
     label: topic.name,
     ...(topic.note === undefined ? {} : { description: topic.note }),
   }));
+
+  const shown = report.hints.slice(0, Math.max(0, revealed));
+  if (shown.length > 0) {
+    picks.push({ label: 'Hints', kind: vscode.QuickPickItemKind.Separator });
+    for (const hint of shown) {
+      picks.push({ label: hint });
+    }
+  }
 
   if (report.searches.length > 0) {
     picks.push({ label: 'Search', kind: vscode.QuickPickItemKind.Separator });
     for (const term of report.searches) {
       picks.push({ label: term, search: term });
     }
+  }
+
+  if (revealed < report.hints.length) {
+    if (picks.length > 0) {
+      picks.push({ label: '', kind: vscode.QuickPickItemKind.Separator });
+    }
+    picks.push({ label: MORE_SPECIFIC, more: true });
   }
 
   return picks;
@@ -102,20 +132,30 @@ export async function whereShouldILook(
     log.info(note);
   }
 
-  const picks = buildGuidancePicks(report);
   // SPEC §7: nothing specific to point at means no window at all.
-  if (picks.length === 0) {
+  if (buildGuidancePicks(report).length === 0) {
     log.info(`no guidance for: ${question.trim()}`);
     vscode.window.setStatusBarMessage('Navigator: nothing to point at', TRANSIENT_MESSAGE_MS);
     return;
   }
 
-  const chosen = await vscode.window.showQuickPick(picks, {
-    title: question.trim(),
-    placeHolder: 'Where to look. Escape closes this and leaves nothing behind.',
-  });
+  let revealed = 0;
+  for (;;) {
+    const chosen = await vscode.window.showQuickPick(buildGuidancePicks(report, revealed), {
+      title: question.trim(),
+      placeHolder: 'Where to look. Escape closes this and leaves nothing behind.',
+    });
 
-  if (chosen?.search !== undefined) {
-    await vscode.env.openExternal(vscode.Uri.parse(searchUrl(chosen.search)));
+    if (chosen === undefined) {
+      return;
+    }
+    if (chosen.search !== undefined) {
+      await vscode.env.openExternal(vscode.Uri.parse(searchUrl(chosen.search)));
+      return;
+    }
+    if (chosen.more !== true) {
+      return;
+    }
+    revealed += 1;
   }
 }

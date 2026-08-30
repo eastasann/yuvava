@@ -305,6 +305,7 @@ describe('buildGuidancePicks', () => {
       status: 'answered',
       topics: [],
       searches: [],
+      hints: [],
       notes: [],
     });
     assert.deepEqual(picks, []);
@@ -315,6 +316,7 @@ describe('buildGuidancePicks', () => {
       status: 'answered',
       topics: [{ name: 'AbortSignal.timeout()', note: 'the deadline' }, { name: '4xx versus 5xx' }],
       searches: ['MDN AbortSignal'],
+      hints: [],
       notes: [],
     });
     assert.deepEqual(
@@ -334,8 +336,45 @@ describe('buildGuidancePicks', () => {
       status: 'answered',
       topics: [{ name: 'backoff' }],
       searches: [],
+      hints: [],
       notes: [],
     });
     assert.equal(picks.length, 1);
+  });
+});
+
+describe('progressive disclosure (SPEC §8)', () => {
+  const report = {
+    status: 'answered' as const,
+    topics: [{ name: 'backoff' }],
+    searches: [],
+    hints: ['Consider what happens on the third failure.', 'The delay is not constant.'],
+    notes: [],
+  };
+
+  it('shows no hint until the developer asks for one', () => {
+    const picks = guidanceModule.buildGuidancePicks(report);
+    assert.deepEqual(picks.map((pick) => pick.label), ['backoff', '', guidanceModule.MORE_SPECIFIC]);
+  });
+
+  it('reveals one more level per request, in order', () => {
+    assert.deepEqual(
+      guidanceModule.buildGuidancePicks(report, 1).map((pick) => pick.label),
+      ['backoff', 'Hints', report.hints[0], '', guidanceModule.MORE_SPECIFIC],
+    );
+    assert.deepEqual(
+      guidanceModule.buildGuidancePicks(report, 2).map((pick) => pick.label),
+      ['backoff', 'Hints', report.hints[0], report.hints[1]],
+    );
+  });
+
+  it('stops offering more once the last level is out', () => {
+    const picks = guidanceModule.buildGuidancePicks(report, 2);
+    assert.equal(picks.some((pick) => pick.label === guidanceModule.MORE_SPECIFIC), false);
+  });
+
+  it('never offers a level the model did not give', () => {
+    const picks = guidanceModule.buildGuidancePicks({ ...report, hints: [] });
+    assert.equal(picks.some((pick) => pick.label === guidanceModule.MORE_SPECIFIC), false);
   });
 });

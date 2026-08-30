@@ -34,6 +34,14 @@ export interface GuidanceReport {
   readonly status: GuidanceStatus;
   readonly topics: readonly GuidanceTopic[];
   readonly searches: readonly string[];
+  /**
+   * SPEC §8 Levels 1-3, least specific first.
+   *
+   * The pipeline hands over all of them; revealing them one at a time is the
+   * caller's job, and it never happens without the developer asking (§8: the
+   * loop being preserved is Hint -> Human thinks -> Human solves).
+   */
+  readonly hints: readonly string[];
   /** Notes for the log: parse problems, anything discarded. */
   readonly notes: readonly string[];
 }
@@ -48,7 +56,7 @@ export interface GuidanceReport {
 export async function runGuidance(options: GuidanceOptions): Promise<GuidanceReport> {
   const question = options.question.trim().slice(0, MAX_QUESTION_LENGTH);
   if (question.length === 0) {
-    return { status: 'no-question', topics: [], searches: [], notes: [] };
+    return { status: 'no-question', topics: [], searches: [], hints: [], notes: [] };
   }
 
   let response;
@@ -71,6 +79,7 @@ export async function runGuidance(options: GuidanceOptions): Promise<GuidanceRep
     status: 'answered',
     topics: parsed.topics,
     searches: parsed.searches,
+    hints: parsed.hints,
     notes: [...(response.warnings ?? []), ...parsed.problems],
   };
 }

@@ -14,10 +14,13 @@
 
 import { extractJsonObject } from './schema.js';
 import { sanitizeLabel } from './sanitize.js';
+import { sanitizeHint } from './hintSanitize.js';
 
 /** Beyond a handful, a list of things to look at stops being navigable. */
 export const MAX_TOPICS = 5;
 export const MAX_SEARCHES = 4;
+/** SPEC §8 has four levels; the topics are Level 0, so three remain. */
+export const MAX_HINTS = 3;
 
 export const GUIDANCE_OUTPUT_SCHEMA = {
   type: 'object',
@@ -50,8 +53,14 @@ export const GUIDANCE_OUTPUT_SCHEMA = {
       description: 'Literal search queries, two to five words each. Never URLs.',
       items: { type: 'string' },
     },
+    hints: {
+      type: 'array',
+      description:
+        'SPEC §8 Levels 1 to 3, least specific first. One sentence each, revealed one at a time only on request. May carry one signature or one skeleton with the decision left out; never code that would run.',
+      items: { type: 'string' },
+    },
   },
-  required: ['topics', 'searches'],
+  required: ['topics', 'searches', 'hints'],
   additionalProperties: false,
 } as const;
 
@@ -64,6 +73,8 @@ export interface GuidanceTopic {
 export interface ParsedGuidance {
   readonly topics: readonly GuidanceTopic[];
   readonly searches: readonly string[];
+  /** SPEC §8 Levels 1-3, least specific first. Revealed one at a time. */
+  readonly hints: readonly string[];
   /** Human-readable notes about anything discarded while parsing. */
   readonly problems: readonly string[];
 }
@@ -84,7 +95,7 @@ export function parseGuidanceResponse(text: string): ParsedGuidance {
   const problems: string[] = [];
   const json = extractJsonObject(text);
   if (json === undefined) {
-    return { topics: [], searches: [], problems: ['response contained no JSON object'] };
+    return { topics: [], searches: [], hints: [], problems: ['response contained no JSON object'] };
   }
 
   let parsed: unknown;
@@ -92,11 +103,11 @@ export function parseGuidanceResponse(text: string): ParsedGuidance {
     parsed = JSON.parse(json);
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
-    return { topics: [], searches: [], problems: [`response was not valid JSON (${detail})`] };
+    return { topics: [], searches: [], hints: [], problems: [`response was not valid JSON (${detail})`] };
   }
 
   if (!isRecord(parsed)) {
-    return { topics: [], searches: [], problems: ['response JSON was not an object'] };
+    return { topics: [], searches: [], hints: [], problems: ['response JSON was not an object'] };
   }
 
   const topics: GuidanceTopic[] = [];
@@ -151,6 +162,26 @@ export function parseGuidanceResponse(text: string): ParsedGuidance {
     }
   }
 
+  const hints: string[] = [];
+  const rawHints = parsed.hints;
+  if (rawHints !== undefined && rawHints !== null) {
+    if (!Array.isArray(rawHints)) {
+      problems.push('"hints" was not an array');
+    } else {
+      rawHints.forEach((entry, index) => {
+        const sanitized = sanitizeHint(entry);
+        if (sanitized.removedCode) {
+          problems.push(`hint ${index}: refused a code fragment that would run as written`);
+        }
+        if (sanitized.text === undefined) {
+          problems.push(`hint ${index}: nothing usable left`);
+          return;
+        }
+        hints.push(sanitized.text);
+      });
+    }
+  }
+
   if (topics.length > MAX_TOPICS) {
     problems.push(`kept the first ${MAX_TOPICS} of ${topics.length} topics`);
     topics.length = MAX_TOPICS;
@@ -159,6 +190,10 @@ export function parseGuidanceResponse(text: string): ParsedGuidance {
     problems.push(`kept the first ${MAX_SEARCHES} of ${searches.length} searches`);
     searches.length = MAX_SEARCHES;
   }
+  if (hints.length > MAX_HINTS) {
+    problems.push(`kept the first ${MAX_HINTS} of ${hints.length} hints`);
+    hints.length = MAX_HINTS;
+  }
 
-  return { topics, searches, problems };
+  return { topics, searches, hints, problems };
 }

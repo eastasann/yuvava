@@ -380,3 +380,62 @@ once, which is a real feature nobody has asked for.
 What was actually specified in issue #5 was the *wording discipline* — no
 emoji, no lecturing, name the topic and let the description be short — and that
 is what the QuickPick does.
+
+## Decision: A hint may show a hole, never a fix — and that is a mechanical test
+
+`src/core/hintSanitize.ts` allows a code fragment through the hint path. Three
+kinds, from SPEC §8 and §9:
+
+| | Example | Allowed |
+| --- | --- | --- |
+| a. a signature | `reduce(callbackFn, initialValue?)` | yes — SPEC §9 asks for it |
+| b. a skeleton with the decision left out | `try { … } catch (e) { /* which failures are worth retrying? */ }` | yes |
+| c. code that would run as written | an implementation | no |
+
+The test for c is not a judgement about intent, it is structural: a fragment is
+kept only if it is a bare signature, **or if it still has a hole** — an
+ellipsis, a standalone `...`, or a comment containing a question mark. Working
+code has none of those. What survives is then flattened to one line, capped at
+6 lines and 200 characters before flattening, and only the first fragment in a
+hint is considered.
+
+Reason:
+SPEC §8 says even Level 3 does not present finished code, and its own examples
+are prose. But a hint that may not show the *shape* of a construct often cannot
+be given at all, and §9 names a signature as the second rung of recall. The
+question was where the line falls, and "does the developer still have something
+to work out?" is the only version of it that can be checked by a program.
+
+Why not a stricter rule:
+Refusing every fragment is what the review path does, and it makes §9 Level 1
+impossible to express. Why not a looser one: anything without a hole is a fix,
+and handing over a fix is the one thing this product exists not to do.
+
+Consequences:
+- **The review path is untouched.** `anchor.ts` still calls `sanitizeMessage`,
+  which still strips every fence and every statement-shaped line.
+  `test/hintSanitize.test.ts` runs each of a, b and c through *both* sanitisers
+  and asserts the review one destroys all three. Do not merge the two.
+- A spread operator (`{ ...rest }`) does not count as a hole, or every object
+  literal would qualify. `...` only counts standing alone.
+- The prompt tells the model that a runnable fragment is thrown away, so the
+  cost of writing one is the whole hint. That is prompt-level encouragement of
+  a rule the code enforces regardless.
+
+## Decision: Hints are revealed one at a time, and only by asking
+
+The guidance QuickPick shows topics (SPEC §8 Level 0). `More specific` appends
+the next hint and reopens the list. Nothing advances on its own, and closing
+the QuickPick discards the position.
+
+Reason:
+SPEC §8's purpose is the loop `Hint -> Human thinks -> Human solves`. A
+disclosure that advances on a timer, on hover, or all at once is just an answer
+delivered in instalments. The developer choosing to go deeper is the part that
+matters, so it is the only thing that moves the level.
+
+Consequence:
+All the levels arrive in one response, so revealing them costs no extra API
+call — the gate is entirely in the UI. That is deliberate: a per-level request
+would make hesitation expensive, and hesitation is the behaviour being
+protected.

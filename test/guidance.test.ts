@@ -12,6 +12,7 @@ import { describe, it } from 'node:test';
 import { MAX_QUESTION_LENGTH, runGuidance } from '../src/core/guidance.js';
 import {
   GUIDANCE_OUTPUT_SCHEMA,
+  MAX_HINTS,
   MAX_SEARCHES,
   MAX_TOPICS,
   parseGuidanceResponse,
@@ -35,6 +36,7 @@ const ANSWER = JSON.stringify({
     { name: '4xx versus 5xx', note: '' },
   ],
   searches: ['MDN AbortSignal', 'fetch retry backoff'],
+  hints: ['A third attempt is not the same as a second one.'],
 });
 
 describe('parseGuidanceResponse', () => {
@@ -113,14 +115,19 @@ describe('parseGuidanceResponse', () => {
       const parsed = parseGuidanceResponse(broken);
       assert.deepEqual(parsed.topics, []);
       assert.deepEqual(parsed.searches, []);
+      assert.deepEqual(parsed.hints, []);
       assert.ok(parsed.problems.length > 0, `expected a problem note for ${JSON.stringify(broken)}`);
     }
   });
 });
 
 describe('the guidance schema cannot carry an answer', () => {
-  it('has exactly two fields, neither of which is a link or a body of text', () => {
-    assert.deepEqual(Object.keys(GUIDANCE_OUTPUT_SCHEMA.properties).sort(), ['searches', 'topics']);
+  it('has three fields, none of which is a link or a body of text', () => {
+    assert.deepEqual(Object.keys(GUIDANCE_OUTPUT_SCHEMA.properties).sort(), [
+      'hints',
+      'searches',
+      'topics',
+    ]);
     assert.deepEqual(
       Object.keys(GUIDANCE_OUTPUT_SCHEMA.properties.topics.items.properties).sort(),
       ['name', 'note'],
@@ -128,7 +135,7 @@ describe('the guidance schema cannot carry an answer', () => {
   });
 
   it('requires every field, so one schema serves both providers', () => {
-    assert.deepEqual([...GUIDANCE_OUTPUT_SCHEMA.required].sort(), ['searches', 'topics']);
+    assert.deepEqual([...GUIDANCE_OUTPUT_SCHEMA.required].sort(), ['hints', 'searches', 'topics']);
     assert.deepEqual(
       [...GUIDANCE_OUTPUT_SCHEMA.properties.topics.items.required].sort(),
       ['name', 'note'],
@@ -168,6 +175,7 @@ describe('runGuidance', () => {
     assert.equal(report.status, 'answered');
     assert.equal(report.topics.length, 2);
     assert.equal(report.searches.length, 2);
+    assert.equal(report.hints.length, 1);
   });
 
   it('is silent rather than wrong when the answer is unusable', async () => {
@@ -175,6 +183,7 @@ describe('runGuidance', () => {
     assert.equal(report.status, 'answered');
     assert.deepEqual(report.topics, []);
     assert.deepEqual(report.searches, []);
+    assert.deepEqual(report.hints, []);
     assert.ok(report.notes.length > 0);
   });
 
@@ -202,5 +211,50 @@ describe('searchUrl', () => {
 
   it('escapes anything that could change the query', () => {
     assert.match(searchUrl('a&b=c'), /\?q=a%26b%3Dc$/);
+  });
+});
+
+describe('hints in a guidance response (SPEC §8)', () => {
+  it('keeps the levels in the order the model gave them', () => {
+    const parsed = parseGuidanceResponse(
+      JSON.stringify({
+        topics: [],
+        searches: [],
+        hints: ['Something is not handled.', 'Think about the empty case.', 'The API omits the field.'],
+      }),
+    );
+    assert.deepEqual(parsed.hints, [
+      'Something is not handled.',
+      'Think about the empty case.',
+      'The API omits the field.',
+    ]);
+  });
+
+  it('lets a skeleton with a hole through, and refuses working code', () => {
+    const parsed = parseGuidanceResponse(
+      JSON.stringify({
+        topics: [],
+        searches: [],
+        hints: [
+          'The shape:\n```js\ntry { … } catch (e) { /* which ones are worth retrying? */ }\n```',
+          'Or just:\n```js\nconst delay = 2 ** attempt * 100;\n```',
+        ],
+      }),
+    );
+    assert.equal(parsed.hints.length, 2);
+    assert.match(parsed.hints[0], /catch \(e\)/);
+    assert.doesNotMatch(parsed.hints[1], /2 \*\* attempt/);
+    assert.ok(parsed.problems.some((problem) => /refused a code fragment/.test(problem)));
+  });
+
+  it('never offers more levels than SPEC §8 has', () => {
+    const parsed = parseGuidanceResponse(
+      JSON.stringify({
+        topics: [],
+        searches: [],
+        hints: Array.from({ length: 7 }, (_, i) => `hint number ${i} goes here`),
+      }),
+    );
+    assert.equal(parsed.hints.length, MAX_HINTS);
   });
 });

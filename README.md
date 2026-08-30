@@ -20,7 +20,8 @@ for why it is built the way it is.
   ever staged to make them visible).
 - `Navigator: Where Should I Look?` takes what you are trying to do and names
   what it involves — the APIs, the concepts, the decisions — plus the words to
-  search for. It does not answer the question.
+  search for. It does not answer the question. If that is not enough, **More
+  specific** opens one more level of hint at a time, and never on its own.
 - Real problems show up as **diagnostics** in the editor and the Problems panel:
   correctness bugs, missed edge cases, unhandled null/undefined, error handling
   gaps, and — at higher intensity — concurrency, security and performance risks.
@@ -29,6 +30,8 @@ for why it is built the way it is.
 ## What it deliberately does not do
 
 - It does not generate implementation code, patches or replacement snippets.
+  A hint may show a signature, or the shape of a construct with the decision
+  left out — never anything that would run as written.
 - It does not offer Quick Fixes, autocomplete, or "apply this change".
 - It does not write to your files. The extension has no code path that can:
   `test/invariant.test.ts` fails the build if one is ever introduced.
