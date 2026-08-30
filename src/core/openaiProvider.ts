@@ -35,8 +35,24 @@ import {
 /** Codex-family model, chosen because the whole job is reading diffs. */
 export const DEFAULT_OPENAI_MODEL = 'gpt-5.1-codex-max';
 
-/** Reasoning models spend tokens before they answer; leave room for both. */
-const MAX_OUTPUT_TOKENS = 8192;
+/**
+ * How much room each job is given to answer, in tokens.
+ *
+ * These are reservations, not costs — but some endpoints bill the reservation
+ * against a rate limit rather than the tokens actually produced. Groq's free
+ * tier does: a guidance request with 1,194 tokens of input was refused at
+ * 9,386 because 8,192 had been set aside for an answer that is a handful of
+ * short strings. Asking for the maximum on every job was waste that only
+ * showed up as somebody else's 413.
+ *
+ * So: what the job could plausibly need, and no more. A review is the one that
+ * needs room — reasoning models spend tokens before they answer, and there may
+ * be up to `maxObservations` findings. Guidance and recall answer with a few
+ * short strings and are capped accordingly.
+ */
+const REVIEW_OUTPUT_TOKENS = 8192;
+const GUIDANCE_OUTPUT_TOKENS = 2048;
+const RECALL_OUTPUT_TOKENS = 1024;
 
 /**
  * What OpenAI accepts, which is a shorter ladder than Anthropic's.
@@ -71,6 +87,8 @@ interface Job {
   readonly user: string;
   readonly schema: object;
   readonly schemaName: string;
+  /** Room set aside for the answer. See the constants above. */
+  readonly maxOutputTokens: number;
   /** Completes "the model declined to ...". */
   readonly declined: string;
 }
@@ -117,6 +135,7 @@ export class OpenAIReviewProvider implements ReviewProvider, GuidanceProvider, R
         user: buildUserPrompt(request.annotatedDiff),
         schema: REVIEW_OUTPUT_SCHEMA,
         schemaName: REVIEW_SCHEMA_NAME,
+        maxOutputTokens: REVIEW_OUTPUT_TOKENS,
         declined: 'review this change',
       },
       request.signal,
@@ -130,6 +149,7 @@ export class OpenAIReviewProvider implements ReviewProvider, GuidanceProvider, R
         user: buildGuidanceUserPrompt(request.question) + (request.context ?? ''),
         schema: GUIDANCE_OUTPUT_SCHEMA,
         schemaName: GUIDANCE_SCHEMA_NAME,
+        maxOutputTokens: GUIDANCE_OUTPUT_TOKENS,
         declined: 'answer',
       },
       request.signal,
@@ -143,6 +163,7 @@ export class OpenAIReviewProvider implements ReviewProvider, GuidanceProvider, R
         user: buildRecallUserPrompt(request.description),
         schema: RECALL_OUTPUT_SCHEMA,
         schemaName: RECALL_SCHEMA_NAME,
+        maxOutputTokens: RECALL_OUTPUT_TOKENS,
         declined: 'answer',
       },
       request.signal,
@@ -162,7 +183,7 @@ export class OpenAIReviewProvider implements ReviewProvider, GuidanceProvider, R
           model: this.model,
           instructions: job.system,
           input: job.user,
-          max_output_tokens: MAX_OUTPUT_TOKENS,
+          max_output_tokens: job.maxOutputTokens,
           ...(this.effort === undefined ? {} : { reasoning: { effort: this.effort } }),
           text: {
             format: {
@@ -256,7 +277,7 @@ export class OpenAIReviewProvider implements ReviewProvider, GuidanceProvider, R
       {
         model: this.model,
         messages,
-        max_tokens: MAX_OUTPUT_TOKENS,
+        max_tokens: job.maxOutputTokens,
         ...(this.effort === undefined ? {} : { reasoning_effort: this.effort }),
         ...(withSchema
           ? {

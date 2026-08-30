@@ -15,7 +15,7 @@ import { ReviewUnavailableError } from '../core/provider.js';
 import { runReview } from '../core/review.js';
 import type { ProviderKind } from '../core/types.js';
 import { promptForMissingApiKey, resolveApiKey, setApiKey } from './apiKey.js';
-import { currentWorkspaceFolder, providerOptions, readConfig } from './config.js';
+import { currentWorkspaceFolder, describeRoute, providerOptions, readConfig } from './config.js';
 import { publishObservations } from './diagnostics.js';
 import { whereShouldILook } from './guidance.js';
 import { GO_DEEPER_COMMAND, goDeeper, registerObservationHover } from './hover.js';
@@ -76,8 +76,9 @@ function activeProvider(): ProviderKind {
   return readConfig(folder?.uri).provider;
 }
 
-function reportUnavailable(reason: string, log: vscode.LogOutputChannel): void {
-  log.warn(`review unavailable: ${reason}`);
+/** `route` is omitted where nothing was sent — a git failure names no endpoint. */
+function reportUnavailable(reason: string, log: vscode.LogOutputChannel, route?: string): void {
+  log.warn(`review unavailable${route === undefined ? '' : ` via ${route}`}: ${reason}`);
   void vscode.window
     .showWarningMessage(`Navigator: review unavailable — ${reason}`, 'Show Log')
     .then((choice) => {
@@ -189,15 +190,9 @@ async function reviewCurrentChanges(
           log.info(note);
         }
 
-        const profile = providerProfile(config.provider);
-        const endpoint =
-          config.provider === 'openai' && config.openaiBaseUrl.length > 0
-            ? ` via ${config.openaiBaseUrl}`
-            : '';
         log.info(
-          `reviewed ${report.files.length} file(s) with ${profile.displayName} ` +
-            `${config.model || profile.defaultModel}${endpoint} at intensity ` +
-            `"${config.intensity}": ${published.shown} observation(s)`,
+          `reviewed ${report.files.length} file(s) with ${describeRoute(config)} ` +
+            `at intensity "${config.intensity}": ${published.shown} observation(s)`,
         );
         statusBar.setObservations(published.shown);
 
@@ -215,12 +210,14 @@ async function reviewCurrentChanges(
       log.info('review cancelled');
       return;
     }
+    // A git failure never reached an endpoint, so naming one would mislead.
+    const route = error instanceof GitError ? undefined : describeRoute(config);
     if (error instanceof ReviewUnavailableError || error instanceof GitError) {
-      reportUnavailable(error.message, log);
+      reportUnavailable(error.message, log, route);
     } else {
       const detail = error instanceof Error ? error.message : String(error);
       log.error(`unexpected failure: ${detail}`);
-      reportUnavailable(detail, log);
+      reportUnavailable(detail, log, route);
     }
   } finally {
     reviewInFlight = false;

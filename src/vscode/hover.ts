@@ -21,7 +21,7 @@ import { ReviewUnavailableError } from '../core/provider.js';
 import { searchUrl } from '../core/search.js';
 import type { Observation } from '../core/types.js';
 import { promptForMissingApiKey, resolveApiKey } from './apiKey.js';
-import { currentWorkspaceFolder, providerOptions, readConfig } from './config.js';
+import { currentWorkspaceFolder, describeRoute, providerOptions, readConfig } from './config.js';
 import { buildGuidancePicks } from './guidance.js';
 import { observationAt, observationFor, rememberedReview } from './observationStore.js';
 import type { NavigatorStatusBar } from './statusBar.js';
@@ -115,7 +115,7 @@ export async function goDeeper(
     });
   } catch (error) {
     const reason = error instanceof ReviewUnavailableError ? error.message : String(error);
-    log.warn(`going deeper failed: ${reason}`);
+    log.warn(`going deeper failed via ${describeRoute(config)}: ${reason}`);
     void vscode.window.showWarningMessage(`Navigator: ${reason}`);
     return;
   } finally {

@@ -29,8 +29,18 @@ import {
 
 export const DEFAULT_ANTHROPIC_MODEL = 'claude-opus-5';
 
-/** Answers are short; the schemas keep them shorter. */
-const MAX_TOKENS = 4096;
+/**
+ * Room set aside for each job's answer, in tokens.
+ *
+ * A reservation rather than a cost — but some endpoints bill the reservation
+ * against a rate limit, so asking for the maximum on every job is waste that
+ * surfaces as a refusal somewhere else (see `openaiProvider.ts`, where it
+ * actually did). A review may carry up to `maxObservations` findings; guidance
+ * and recall answer with a few short strings.
+ */
+const REVIEW_MAX_TOKENS = 4096;
+const GUIDANCE_MAX_TOKENS = 2048;
+const RECALL_MAX_TOKENS = 1024;
 
 const FALLBACK_BETA = 'server-side-fallback-2026-07-01';
 
@@ -65,6 +75,7 @@ export class AnthropicReviewProvider implements ReviewProvider, GuidanceProvider
       buildSystemPrompt(request.intensity),
       buildUserPrompt(request.annotatedDiff),
       REVIEW_OUTPUT_SCHEMA,
+      REVIEW_MAX_TOKENS,
       'review this change',
       request.signal,
     );
@@ -75,6 +86,7 @@ export class AnthropicReviewProvider implements ReviewProvider, GuidanceProvider
       buildGuidanceSystemPrompt(),
       buildGuidanceUserPrompt(request.question) + (request.context ?? ''),
       GUIDANCE_OUTPUT_SCHEMA,
+      GUIDANCE_MAX_TOKENS,
       'answer',
       request.signal,
     );
@@ -85,6 +97,7 @@ export class AnthropicReviewProvider implements ReviewProvider, GuidanceProvider
       buildRecallSystemPrompt(),
       buildRecallUserPrompt(request.description),
       RECALL_OUTPUT_SCHEMA,
+      RECALL_MAX_TOKENS,
       'answer',
       request.signal,
     );
@@ -94,6 +107,7 @@ export class AnthropicReviewProvider implements ReviewProvider, GuidanceProvider
     system: string,
     user: string,
     schema: object,
+    maxTokens: number,
     job: string,
     signal: AbortSignal | undefined,
   ): Promise<ProviderResponse> {
@@ -102,7 +116,7 @@ export class AnthropicReviewProvider implements ReviewProvider, GuidanceProvider
       message = await this.client.beta.messages.create(
         {
           model: this.model,
-          max_tokens: MAX_TOKENS,
+          max_tokens: maxTokens,
           system,
           messages: [{ role: 'user', content: user }],
           output_config: {
