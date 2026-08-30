@@ -12,6 +12,7 @@ import { describe, it } from 'node:test';
 import { MAX_QUESTION_LENGTH, runGuidance } from '../src/core/guidance.js';
 import {
   GUIDANCE_OUTPUT_SCHEMA,
+  MAX_EXPLORE,
   MAX_HINTS,
   MAX_SEARCHES,
   MAX_TOPICS,
@@ -37,6 +38,7 @@ const ANSWER = JSON.stringify({
   ],
   searches: ['MDN AbortSignal', 'fetch retry backoff'],
   hints: ['A third attempt is not the same as a second one.'],
+  explore: ['AbortController', 'Retry-After'],
 });
 
 describe('parseGuidanceResponse', () => {
@@ -124,6 +126,7 @@ describe('parseGuidanceResponse', () => {
 describe('the guidance schema cannot carry an answer', () => {
   it('has three fields, none of which is a link or a body of text', () => {
     assert.deepEqual(Object.keys(GUIDANCE_OUTPUT_SCHEMA.properties).sort(), [
+      'explore',
       'hints',
       'searches',
       'topics',
@@ -135,7 +138,12 @@ describe('the guidance schema cannot carry an answer', () => {
   });
 
   it('requires every field, so one schema serves both providers', () => {
-    assert.deepEqual([...GUIDANCE_OUTPUT_SCHEMA.required].sort(), ['hints', 'searches', 'topics']);
+    assert.deepEqual([...GUIDANCE_OUTPUT_SCHEMA.required].sort(), [
+      'explore',
+      'hints',
+      'searches',
+      'topics',
+    ]);
     assert.deepEqual(
       [...GUIDANCE_OUTPUT_SCHEMA.properties.topics.items.required].sort(),
       ['name', 'note'],
@@ -256,5 +264,43 @@ describe('hints in a guidance response (SPEC §8)', () => {
       }),
     );
     assert.equal(parsed.hints.length, MAX_HINTS);
+  });
+});
+
+describe('adjacent things (SPEC §21.6)', () => {
+  it('keeps names, and refuses to repeat a topic back as a discovery', () => {
+    const parsed = parseGuidanceResponse(
+      JSON.stringify({
+        topics: [{ name: 'AbortSignal', note: '' }],
+        searches: [],
+        hints: [],
+        explore: ['AbortController', 'abortsignal', 'Retry-After'],
+      }),
+    );
+    assert.deepEqual(parsed.explore, ['AbortController', 'Retry-After']);
+  });
+
+  it('is a glance, not a reading list', () => {
+    const parsed = parseGuidanceResponse(
+      JSON.stringify({
+        topics: [],
+        searches: [],
+        hints: [],
+        explore: Array.from({ length: 8 }, (_, i) => `Thing ${i}`),
+      }),
+    );
+    assert.equal(parsed.explore.length, MAX_EXPLORE);
+  });
+
+  it('cannot smuggle code or a link into a name', () => {
+    const parsed = parseGuidanceResponse(
+      JSON.stringify({
+        topics: [],
+        searches: [],
+        hints: [],
+        explore: ['const x = 1;', 'see https://example.invalid/x', 'Retry-After'],
+      }),
+    );
+    assert.deepEqual(parsed.explore, ['see', 'Retry-After']);
   });
 });

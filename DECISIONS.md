@@ -574,3 +574,30 @@ When to revisit:
 When a real session produces a run of terms MDN cannot resolve, and the pattern
 in them says which index would have. Not before — that is the measurement, and
 guessing at it is how the setting gets added for nothing.
+
+## Decision: Adjacent things are the last rung of the disclosure, not a section
+
+SPEC §21.6's "You may want to explore" list appears only in the guidance
+QuickPick, only after the developer has exhausted the hints, and never on its
+own. It is `More specific` one more time.
+
+Reason:
+§21.6 asks for two things that pull against each other: the discovery should be
+*serendipitous*, and the frequency should be *low* so it does not break
+concentration. A dedicated command would be neither — nothing is accidental
+about running it. A section shown by default would be the wrong half: seen
+every time, and read as part of the answer.
+
+The last rung gets both. The developer asked for "more", not for "adjacent
+things", so what arrives is unasked-for in the way that matters; and they only
+get there by having already read everything else, which is exactly the moment
+when a glance sideways costs nothing.
+
+Consequences:
+- A developer who stopped at the topics never sees it. That is correct: it is
+  the least important thing Navigator has to say.
+- It is names only, each one searchable. No explanations — explaining an
+  adjacent API is how a discovery becomes a lecture (SPEC §18.5).
+- Something already named as a topic is dropped from it; repeating the answer
+  back is not a discovery.
+- It never appears in the review path, where an interruption costs most.

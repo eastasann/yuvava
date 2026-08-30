@@ -40,6 +40,14 @@ export interface GuidancePick extends vscode.QuickPickItem {
 }
 
 /**
+ * How many times `More specific` can be chosen: one per hint, plus one for the
+ * adjacent things (SPEC §21.6) if the model offered any.
+ */
+export function disclosureSteps(report: GuidanceReport): number {
+  return report.hints.length + (report.explore.length > 0 ? 1 : 0);
+}
+
+/**
  * Renders the guidance at the current level of disclosure.
  *
  * `revealed` is how many hints the developer has asked for; it starts at zero
@@ -65,6 +73,15 @@ export function buildGuidancePicks(
     }
   }
 
+  // SPEC §21.6, and the last rung: adjacent things are reached, never
+  // presented. A developer who stopped at the topics never sees them.
+  if (report.explore.length > 0 && revealed > report.hints.length) {
+    picks.push({ label: 'You may want to explore', kind: vscode.QuickPickItemKind.Separator });
+    for (const name of report.explore) {
+      picks.push({ label: name, search: name });
+    }
+  }
+
   if (report.searches.length > 0) {
     picks.push({ label: 'Search', kind: vscode.QuickPickItemKind.Separator });
     for (const term of report.searches) {
@@ -80,7 +97,7 @@ export function buildGuidancePicks(
     }
   }
 
-  if (revealed < report.hints.length) {
+  if (revealed < disclosureSteps(report)) {
     if (picks.length > 0) {
       picks.push({ label: '', kind: vscode.QuickPickItemKind.Separator });
     }

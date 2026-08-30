@@ -309,6 +309,7 @@ describe('buildGuidancePicks', () => {
       topics: [],
       searches: [],
       hints: [],
+      explore: [],
       notes: [],
     });
     assert.deepEqual(picks, []);
@@ -320,6 +321,7 @@ describe('buildGuidancePicks', () => {
       topics: [{ name: 'AbortSignal.timeout()', note: 'the deadline' }, { name: '4xx versus 5xx' }],
       searches: ['MDN AbortSignal'],
       hints: [],
+      explore: [],
       notes: [],
     });
     assert.deepEqual(
@@ -340,6 +342,7 @@ describe('buildGuidancePicks', () => {
       topics: [{ name: 'backoff' }],
       searches: [],
       hints: [],
+      explore: [],
       notes: [],
     });
     assert.equal(picks.length, 1);
@@ -352,6 +355,7 @@ describe('progressive disclosure (SPEC §8)', () => {
     topics: [{ name: 'backoff' }],
     searches: [],
     hints: ['Consider what happens on the third failure.', 'The delay is not constant.'],
+    explore: [],
     notes: [],
   };
 
@@ -459,6 +463,7 @@ describe('documentation links come from the index (SPEC §10)', () => {
     topics: [{ name: 'AbortSignal' }],
     searches: ['MDN AbortSignal', 'some framework thing'],
     hints: [],
+    explore: [],
     notes: [],
   };
   const links = new Map([
@@ -498,5 +503,53 @@ describe('documentation links come from the index (SPEC §10)', () => {
     const withUrlInTerm = { ...report, searches: ['https://example.invalid/made/up'] };
     const picks = guidanceModule.buildGuidancePicks(withUrlInTerm, 0, links);
     assert.deepEqual(picks.filter((pick) => pick.url !== undefined), []);
+  });
+});
+
+describe('documentation exploration (SPEC §21.6)', () => {
+  const report = {
+    status: 'answered' as const,
+    topics: [{ name: 'AbortSignal' }],
+    searches: [],
+    hints: ['The deadline and the retry are different clocks.'],
+    explore: ['AbortController', 'Promise.any()', 'Retry-After'],
+    notes: [],
+  };
+
+  it('is not shown to a developer who stopped at the topics', () => {
+    const labels = guidanceModule.buildGuidancePicks(report).map((pick) => pick.label);
+    for (const name of report.explore) {
+      assert.equal(labels.includes(name), false, `${name} was presented, not reached`);
+    }
+  });
+
+  it('is not shown at the hint levels either', () => {
+    const labels = guidanceModule.buildGuidancePicks(report, 1).map((pick) => pick.label);
+    assert.equal(labels.includes('AbortController'), false);
+    assert.ok(labels.includes(guidanceModule.MORE_SPECIFIC), 'one rung should remain');
+  });
+
+  it('arrives as the last rung, under its own heading, and is searchable', () => {
+    const picks = guidanceModule.buildGuidancePicks(report, 2);
+    const labels = picks.map((pick) => pick.label);
+    assert.ok(labels.includes('You may want to explore'));
+    for (const name of report.explore) {
+      const pick = picks.find((entry) => entry.label === name);
+      assert.equal(pick?.search, name);
+    }
+    assert.equal(labels.includes(guidanceModule.MORE_SPECIFIC), false, 'that was the last rung');
+  });
+
+  it('adds no rung when the model offered nothing adjacent', () => {
+    const bare = { ...report, explore: [] };
+    assert.equal(guidanceModule.disclosureSteps(bare), 1);
+    assert.equal(guidanceModule.disclosureSteps(report), 2);
+  });
+
+  it('is reachable even when there were no hints at all', () => {
+    const noHints = { ...report, hints: [] };
+    assert.equal(guidanceModule.disclosureSteps(noHints), 1);
+    const labels = guidanceModule.buildGuidancePicks(noHints, 1).map((pick) => pick.label);
+    assert.ok(labels.includes('You may want to explore'));
   });
 });

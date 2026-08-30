@@ -42,6 +42,12 @@ export interface GuidanceReport {
    * loop being preserved is Hint -> Human thinks -> Human solves).
    */
   readonly hints: readonly string[];
+  /**
+   * SPEC §21.6. Things next to the question that the developer did not ask
+   * about. The last rung of the same disclosure, so it is reached rather than
+   * presented — which is the whole of "keep the frequency low".
+   */
+  readonly explore: readonly string[];
   /** Notes for the log: parse problems, anything discarded. */
   readonly notes: readonly string[];
 }
@@ -56,7 +62,7 @@ export interface GuidanceReport {
 export async function runGuidance(options: GuidanceOptions): Promise<GuidanceReport> {
   const question = options.question.trim().slice(0, MAX_QUESTION_LENGTH);
   if (question.length === 0) {
-    return { status: 'no-question', topics: [], searches: [], hints: [], notes: [] };
+    return { status: 'no-question', topics: [], searches: [], hints: [], explore: [], notes: [] };
   }
 
   let response;
@@ -80,6 +86,7 @@ export async function runGuidance(options: GuidanceOptions): Promise<GuidanceRep
     topics: parsed.topics,
     searches: parsed.searches,
     hints: parsed.hints,
+    explore: parsed.explore,
     notes: [...(response.warnings ?? []), ...parsed.problems],
   };
 }

@@ -21,6 +21,8 @@ export const MAX_TOPICS = 5;
 export const MAX_SEARCHES = 4;
 /** SPEC §8 has four levels; the topics are Level 0, so three remain. */
 export const MAX_HINTS = 3;
+/** SPEC §21.6 shows three. More would be a reading list, not a glance. */
+export const MAX_EXPLORE = 3;
 
 export const GUIDANCE_OUTPUT_SCHEMA = {
   type: 'object',
@@ -59,8 +61,14 @@ export const GUIDANCE_OUTPUT_SCHEMA = {
         'SPEC §8 Levels 1 to 3, least specific first. One sentence each, revealed one at a time only on request. May carry one signature or one skeleton with the decision left out; never code that would run.',
       items: { type: 'string' },
     },
+    explore: {
+      type: 'array',
+      description:
+        'SPEC §21.6. At most three things next to the question that the developer did not ask about — a neighbouring API, a related concept, a constraint. Names only, never explanations.',
+      items: { type: 'string' },
+    },
   },
-  required: ['topics', 'searches', 'hints'],
+  required: ['topics', 'searches', 'hints', 'explore'],
   additionalProperties: false,
 } as const;
 
@@ -75,6 +83,8 @@ export interface ParsedGuidance {
   readonly searches: readonly string[];
   /** SPEC §8 Levels 1-3, least specific first. Revealed one at a time. */
   readonly hints: readonly string[];
+  /** SPEC §21.6. Adjacent things, shown last and only if reached. */
+  readonly explore: readonly string[];
   /** Human-readable notes about anything discarded while parsing. */
   readonly problems: readonly string[];
 }
@@ -95,7 +105,7 @@ export function parseGuidanceResponse(text: string): ParsedGuidance {
   const problems: string[] = [];
   const json = extractJsonObject(text);
   if (json === undefined) {
-    return { topics: [], searches: [], hints: [], problems: ['response contained no JSON object'] };
+    return { topics: [], searches: [], hints: [], explore: [], problems: ['response contained no JSON object'] };
   }
 
   let parsed: unknown;
@@ -103,11 +113,17 @@ export function parseGuidanceResponse(text: string): ParsedGuidance {
     parsed = JSON.parse(json);
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
-    return { topics: [], searches: [], hints: [], problems: [`response was not valid JSON (${detail})`] };
+    return {
+      topics: [],
+      searches: [],
+      hints: [],
+      explore: [],
+      problems: [`response was not valid JSON (${detail})`],
+    };
   }
 
   if (!isRecord(parsed)) {
-    return { topics: [], searches: [], hints: [], problems: ['response JSON was not an object'] };
+    return { topics: [], searches: [], hints: [], explore: [], problems: ['response JSON was not an object'] };
   }
 
   const topics: GuidanceTopic[] = [];
@@ -182,6 +198,21 @@ export function parseGuidanceResponse(text: string): ParsedGuidance {
     }
   }
 
+  const explore: string[] = [];
+  const rawExplore = parsed.explore;
+  if (Array.isArray(rawExplore)) {
+    const seen = new Set(topics.map((topic) => topic.name.toLowerCase()));
+    for (const entry of rawExplore) {
+      const name = sanitizeLabel(entry, MAX_NAME_LENGTH);
+      // Something already named above is not something to stumble over.
+      if (name === undefined || seen.has(name.toLowerCase())) {
+        continue;
+      }
+      seen.add(name.toLowerCase());
+      explore.push(name);
+    }
+  }
+
   if (topics.length > MAX_TOPICS) {
     problems.push(`kept the first ${MAX_TOPICS} of ${topics.length} topics`);
     topics.length = MAX_TOPICS;
@@ -194,6 +225,9 @@ export function parseGuidanceResponse(text: string): ParsedGuidance {
     problems.push(`kept the first ${MAX_HINTS} of ${hints.length} hints`);
     hints.length = MAX_HINTS;
   }
+  if (explore.length > MAX_EXPLORE) {
+    explore.length = MAX_EXPLORE;
+  }
 
-  return { topics, searches, hints, problems };
+  return { topics, searches, hints, explore, problems };
 }

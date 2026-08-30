@@ -62,8 +62,15 @@ Mark what the developer has to work out with \`…\`, or with a comment ending i
 a question mark. A fragment that would run as written is refused and thrown
 away, so writing one costs the developer the whole hint.
 
+"explore" — at most three things *next to* the question, which the developer
+did not ask about: a neighbouring API, a related concept, a constraint, a
+deprecation, an abstraction that turns out to fit. Not steps, not the answer,
+not a restatement of the topics above. This is the one place you may mention
+something they did not bring up, and it is shown last, so keep it to things
+worth stumbling over. Leave it empty rather than padding it.
+
 If you have nothing specific to point at, return
-{"topics": [], "searches": [], "hints": []}.`;
+{"topics": [], "searches": [], "hints": [], "explore": []}.`;
 
 export function buildGuidanceSystemPrompt(): string {
   return `${BASE_ROLE}\n\n${OUTPUT_RULES}`;
