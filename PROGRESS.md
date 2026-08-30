@@ -12,17 +12,24 @@ The four surfaces §12 asks for — Diagnostics, Problems panel, Hover, Status B
 
 The working tree is clean and `npm run verify` is green.
 
-**A real endpoint has answered, but has never yet succeeded.** Groq returned a
-404 and then a 413 to real requests — which confirms the wire format, the auth
-and the error path, and confirms nothing about whether a review is any good.
+**A request has now succeeded.** `Where Should I Look?` returned topics from
+Groq and rendered them, so the whole guidance path — request, schema, response,
+validation, sanitising, display — works end to end against a real server. What
+has still never happened is a successful *review*: no observation has ever
+reached a diagnostic.
 Anything below that sounds like a capability is a capability whose *tests*
 pass. Treat "it works" as unproven until `npm run smoke` comes back clean, and
 "it is useful" as unproven until `npm run eval` produces numbers.
 
-Both of those first contacts found real defects, which is what first contact is
-for: a reservation that was refused for room it would never use, a log that
-said what failed but not where, and a model name recommended in the docs that
-does not exist. All three are fixed. See Known problems and `DECISIONS.md`.
+Every one of those first contacts found a real defect, which is what first
+contact is for: a reservation refused for room it would never use, a log that
+said what failed but not where, a model name recommended in the docs that does
+not exist, and — the moment something finally worked — an answer whose main
+content could not be clicked. All four are fixed. See `DECISIONS.md`.
+
+The pattern is worth naming for the next loop: **none of them was findable from
+inside this repository.** Every test here asserts what Navigator *sends* or
+what it *computes*, and all four defects lived in what happened next.
 
 Read the open issues before this file (`LOOP.md` §2.2): they are the backlog of
 record. Six are open — two blocked on this environment, four waiting on
@@ -49,7 +56,7 @@ Last executed on this tree, Node v22.22.2 / npm 10.9.7, git 2.43.0:
 | --- | --- |
 | `npm run lint` | exit 0, no warnings |
 | `npm run compile` | exit 0 |
-| `node --test "out/test/**/*.test.js"` | exit 0 — **377 pass, 0 fail, 0 skipped**, 81 suites, ~1.2 s |
+| `node --test "out/test/**/*.test.js"` | exit 0 — **390 pass, 0 fail, 0 skipped**, 85 suites, ~1.2 s |
 | `npm run package` | exit 0 — `yuvava.vsix`, 5,527 files, 6.94 MB |
 
 Not runnable in a cloud container, and not part of the gate:
@@ -105,7 +112,7 @@ Re-run the gate before trusting the table above if any source file has changed.
   answer (`test/tokenBudget.test.ts`), and every failure log names the route.
 - Two single retries on the compatible path: a rejected JSON schema, and a
   refused request size (`test/sizeRetry.test.ts`).
-- 377 tests, including `test/invariant.test.ts` (the §16 guard),
+- 390 tests, including `test/invariant.test.ts` (the §16 guard),
   `test/gitIntegration.test.ts` (real git, and it fails without it), and
   `test/eval.test.ts` (the eval set and scorer).
 

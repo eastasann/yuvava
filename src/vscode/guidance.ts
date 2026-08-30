@@ -70,10 +70,16 @@ export function buildGuidancePicks(
     picks.push({ label: `Context: ${contextSummary}`, kind: vscode.QuickPickItemKind.Separator });
   }
 
-  picks.push(...report.topics.map((topic) => ({
-    label: topic.name,
-    ...(topic.note === undefined ? {} : { description: topic.note }),
-  })));
+  // A topic is an API, a concept, a decision — exactly the thing the developer
+  // would go and look up, which is the whole of SPEC §10. Leaving it inert made
+  // the answer's main content a dead end.
+  picks.push(
+    ...report.topics.map((topic) => ({
+      label: topic.name,
+      search: topic.name,
+      ...(topic.note === undefined ? {} : { description: topic.note }),
+    })),
+  );
 
   const shown = report.hints.slice(0, Math.max(0, revealed));
   if (shown.length > 0) {
@@ -115,6 +121,35 @@ export function buildGuidancePicks(
   }
 
   return picks;
+}
+
+/**
+ * What choosing an item means.
+ *
+ * Extracted because this is precisely where #35 was: a topic fell through
+ * every branch and the caller returned, closing the window having done
+ * nothing. `again` is that case named — there is nowhere to go, so the list
+ * comes back rather than disappearing.
+ */
+export type PickAction =
+  | { readonly kind: 'close' }
+  | { readonly kind: 'open'; readonly url: string }
+  | { readonly kind: 'reveal' }
+  | { readonly kind: 'again' };
+
+export function actionFor(
+  chosen: { readonly search?: string; readonly url?: string; readonly more?: true } | undefined,
+): PickAction {
+  if (chosen === undefined) {
+    return { kind: 'close' };
+  }
+  if (chosen.search !== undefined) {
+    return { kind: 'open', url: chosen.url ?? searchUrl(chosen.search) };
+  }
+  if (chosen.more === true) {
+    return { kind: 'reveal' };
+  }
+  return { kind: 'again' };
 }
 
 export async function whereShouldILook(
@@ -194,19 +229,20 @@ export async function whereShouldILook(
     const picks = buildGuidancePicks(report, revealed, links, selection?.summary);
     const chosen = await vscode.window.showQuickPick(picks, {
       title: question.trim(),
-      placeHolder: 'Where to look. Escape closes this and leaves nothing behind.',
+      placeHolder: 'Choose one to look it up. Escape closes this and leaves nothing behind.',
     });
 
-    if (chosen === undefined) {
+    const action = actionFor(chosen);
+    if (action.kind === 'close') {
       return;
     }
-    if (chosen.search !== undefined) {
-      await vscode.env.openExternal(vscode.Uri.parse(chosen.url ?? searchUrl(chosen.search)));
+    if (action.kind === 'open') {
+      await vscode.env.openExternal(vscode.Uri.parse(action.url));
       return;
     }
-    if (chosen.more !== true) {
-      return;
+    if (action.kind === 'reveal') {
+      revealed += 1;
     }
-    revealed += 1;
+    // 'again': it was text. The list comes back rather than vanishing.
   }
 }

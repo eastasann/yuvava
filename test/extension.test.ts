@@ -329,8 +329,10 @@ describe('buildGuidancePicks', () => {
     assert.deepEqual(
       picks.map((pick) => [pick.label, pick.description, pick.search]),
       [
-        ['AbortSignal.timeout()', 'the deadline', undefined],
-        ['4xx versus 5xx', undefined, undefined],
+        // A topic carries its own name as the thing to look up (#35): leaving
+        // it inert made the answer's main content a dead end.
+        ['AbortSignal.timeout()', 'the deadline', 'AbortSignal.timeout()'],
+        ['4xx versus 5xx', undefined, '4xx versus 5xx'],
         ['Search', undefined, undefined],
         ['MDN AbortSignal', undefined, 'MDN AbortSignal'],
       ],

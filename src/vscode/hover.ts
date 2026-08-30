@@ -18,11 +18,10 @@ import { runGuidance, type GuidanceReport } from '../core/guidance.js';
 import { buildObservationContext, buildObservationQuestion } from '../core/observationHints.js';
 import { createReviewProvider } from '../core/providerFactory.js';
 import { ReviewUnavailableError } from '../core/provider.js';
-import { searchUrl } from '../core/search.js';
 import type { Observation } from '../core/types.js';
 import { promptForMissingApiKey, resolveApiKey } from './apiKey.js';
 import { currentWorkspaceFolder, describeRoute, providerOptions, readConfig } from './config.js';
-import { buildGuidancePicks } from './guidance.js';
+import { actionFor, buildGuidancePicks } from './guidance.js';
 import { observationAt, observationFor, rememberedReview } from './observationStore.js';
 import type { NavigatorStatusBar } from './statusBar.js';
 
@@ -138,20 +137,22 @@ export async function goDeeper(
   for (;;) {
     const chosen = await vscode.window.showQuickPick(buildGuidancePicks(report, revealed), {
       title: observation.message,
-      placeHolder: 'Escape closes this and leaves nothing behind.',
+      placeHolder: 'Choose one to look it up. Escape closes this and leaves nothing behind.',
     });
 
-    if (chosen === undefined) {
+    const action = actionFor(chosen);
+    if (action.kind === 'close') {
       return;
     }
-    if (chosen.search !== undefined) {
-      await vscode.env.openExternal(vscode.Uri.parse(searchUrl(chosen.search)));
+    if (action.kind === 'open') {
+      await vscode.env.openExternal(vscode.Uri.parse(action.url));
       return;
     }
-    if (chosen.more !== true) {
-      return;
+    if (action.kind === 'reveal') {
+      revealed += 1;
     }
-    revealed += 1;
+    // A hint is text. Show it again rather than vanishing: a window that
+    // closes and does nothing reads as broken.
   }
 }
 

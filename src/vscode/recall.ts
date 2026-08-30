@@ -16,10 +16,9 @@ import { recallStages, type RecallCandidate } from '../core/recallSchema.js';
 import { MdnDocsIndex, resolveDocsLinks, type DocsLink } from '../core/docsIndex.js';
 import { createReviewProvider } from '../core/providerFactory.js';
 import { ReviewUnavailableError } from '../core/provider.js';
-import { searchUrl } from '../core/search.js';
 import { currentWorkspaceFolder, describeRoute, providerOptions, readConfig } from './config.js';
 import { promptForMissingApiKey, resolveApiKey } from './apiKey.js';
-import { MORE_SPECIFIC } from './guidance.js';
+import { MORE_SPECIFIC, actionFor } from './guidance.js';
 import type { NavigatorStatusBar } from './statusBar.js';
 
 const TRANSIENT_MESSAGE_MS = 4000;
@@ -135,7 +134,7 @@ export async function whatWasItCalled(
 
   const chosenName = await vscode.window.showQuickPick(buildNamePicks(report), {
     title: description.trim(),
-    placeHolder: 'If the name is enough, close this.',
+    placeHolder: 'If the name is enough, press Escape. Choose one to go further.',
   });
   if (chosenName === undefined) {
     return;
@@ -161,16 +160,17 @@ export async function whatWasItCalled(
       placeHolder: 'Escape closes this and leaves nothing behind.',
     });
 
-    if (chosen === undefined) {
+    const action = actionFor(chosen);
+    if (action.kind === 'close') {
       return;
     }
-    if (chosen.search !== undefined) {
-      await vscode.env.openExternal(vscode.Uri.parse(chosen.url ?? searchUrl(chosen.search)));
+    if (action.kind === 'open') {
+      await vscode.env.openExternal(vscode.Uri.parse(action.url));
       return;
     }
-    if (chosen.more !== true) {
-      return;
+    if (action.kind === 'reveal') {
+      revealed += 1;
     }
-    revealed += 1;
+    // A signature or a concept is text. Show it again rather than vanishing.
   }
 }
