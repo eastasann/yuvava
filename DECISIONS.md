@@ -807,3 +807,29 @@ out to a model — `npm run smoke` is that.
 Status: written, loadable, and never run. This environment cannot even
 download VS Code (`update.code.visualstudio.com` is outside its egress
 allowlist), which is issue #18 and is recorded in `PROGRESS.md`.
+
+## Decision: No review history — not planned
+
+`SPEC.md` §19 lists "Review history" among the Optional items and never defines
+it. Issue #12 found three readings, and it is closed not planned rather than
+left open, because the missing thing is not a decision — it is a demand.
+
+The three readings, and why none is built:
+
+1. **Look back at past reviews.** Nothing in the loop this product describes —
+   write, review, fix, continue — involves re-reading an old review. The
+   diagnostics are on screen while they matter and gone when they do not, and
+   that transience is the same property that keeps Navigator from becoming a
+   thing one converses with.
+2. **Never show a dismissed observation twice.** This one has real value and is
+   the only one worth reopening for: it serves SPEC §7 directly. It needs
+   persistent per-observation state, which is the same storage question as
+   §21.4 (see its entry), and it needs to know that the same false positive
+   *actually* recurs. Nobody has seen a review yet, so that is a guess.
+3. **Aggregate what gets flagged.** That is review-quality measurement, which
+   is `test/eval/`, not a feature of the extension.
+
+When to revisit:
+Reading 2, when `feedback` issues show the same observation being ignored
+across several reviews. That report is the demand; until it exists, this would
+be a store, a lifecycle and a settings entry built on a hunch.
