@@ -745,3 +745,26 @@ What the offline run is worth:
 It pins the pipeline and the scorer against hand-written answers, which is a
 real regression test and is *not* a quality measurement. The numbers that mean
 something come from `npm run eval`, which needs a key.
+
+## Decision: `npm run smoke` is the one command for whoever holds a key
+
+`scripts/smoke.mjs` makes one real request down each of the four network paths
+— review, guidance, recall, and the MDN index — prints what came back, and on
+failure prints the raw error plus a note about the two things most likely to be
+wrong on a compatible endpoint.
+
+Reason:
+Issue #16 is an environment blocker, not a design question: no key exists here
+and no server has ever accepted one of these requests. The useful thing an
+agent without a key can do is make the check take one command instead of an
+afternoon, so the person who has one is not also asked to work out what to run.
+
+Why it names the two suspects in its output:
+`isStructuredOutputRejection` matches on error *wording*, which varies between
+services, and token limits may be capped or interpreted differently. Either is
+fixed instantly by one real error message and not at all by reasoning. The
+script asks for that message by name.
+
+Verified as far as it can be: run against a local OpenAI-compatible stub
+server, review, guidance and recall all completed and the MDN check failed with
+its intended message.
