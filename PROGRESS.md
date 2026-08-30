@@ -86,25 +86,22 @@ Re-run these before trusting the table if any source file has changed since.
 
 ## Remaining
 
-Not started, and each is a deliberate hold rather than an oversight.
+**The authoritative list of unstarted work is the open GitHub Issues**
+(`LOOP.md` §2.2). This section summarises where things stand; it does not
+duplicate the list, and it goes stale the moment an issue is filed or closed.
 
-- **Progressive hints (`SPEC.md` §8).** The obvious designs all drift toward a
-  chat UI, which §12.3 rejects. Settle the interaction surface before writing
-  code; this is a product decision, not an implementation one.
-- **Documentation navigation (§10).** Would need a source of documentation
-  links. Deciding where those come from is the hard part, not rendering them.
-- **Recall assistance (§9).** Same interaction-surface problem as §8.
-- **Automatic review (§14).** `SPEC.md` §13 says only after the manual flow has
-  proven useful — and it has not been used against a live API yet (see Known
-  problems). Needs debounce/cooldown when it happens.
-- **Review history.** No demand established.
-- **Live confirmation of any endpoint.** See Known problems; this is the
-  highest-value next step. A free tier (Groq, Cerebras) or a local Ollama now
-  needs only `navigator.openaiBaseUrl`, so it no longer costs anything to try.
-  Likely to be answered by the owner's first real use rather than by a loop.
-- **A `feedback` label does not exist in the repository yet.** The issue
-  template names it, which works from the web UI; creating an issue through
-  the API needs the label created first.
+Where the remaining work sits, by the shape of what is blocking it:
+
+- **Waiting on one real API call** — everything about whether Navigator is
+  actually *useful* rather than merely correct. Live endpoint confirmation
+  (#16), review-quality measurement (#17), and anything whose design needs
+  observed usage: automatic review (#10, held by `SPEC.md` §13), passive
+  behaviour (#11), context-aware review (#14), learning-aware hint decay (#15).
+  See Known problems for exactly what is missing.
+- **Waiting on a real VS Code** — extension-host testing (#18).
+- **Open backlog with no external blocker** — read the issue list.
+
+Start a session by listing open issues, not by reading this section.
 
 ## Known problems
 

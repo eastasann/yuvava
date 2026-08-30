@@ -31,7 +31,7 @@ things that carry across are files:
 | `DECISIONS.md` | why the current durable design choices were made |
 | `PROGRESS.md` | where development currently stands |
 | `git` | implementation history |
-| GitHub Issues | where real-world observations arrive (`feedback` label) |
+| GitHub Issues | the inbox: real-world observations, and the work backlog |
 
 Two procedures in `LOOP.md` are mandatory, not advisory:
 
@@ -49,9 +49,27 @@ needs it, write it down.
 
 Feedback from real use arrives as GitHub Issues, not as files: they are cheap
 to file, and editable and deletable, which files in git history are not. Issues
-are the inbox; the repository is the memory. When you act on one, put the
+are also where the work backlog lives — **the list of unstarted work is
+authoritative there, not in `PROGRESS.md`**, which summarises and points at it.
+Issues are the inbox; the repository is the memory. When you act on one, put the
 durable part in `DECISIONS.md`, the unresolved part in `PROGRESS.md`, and close
 the issue.
+
+Labels, and what each means:
+
+| Label | What it marks |
+| --- | --- |
+| `feedback` | an observation from real use (`.github/ISSUE_TEMPLATE/feedback.md`) |
+| `enhancement` | a capability `SPEC.md` asks for that does not exist yet |
+| `verification` | something believed to work that has never been observed working |
+| `quality` | a known defect or waste in what already exists |
+| `blocked-on-design` | a decision has to be made before code can be written |
+
+One issue, one commit. Close an issue only when it has reached one of three
+states — implemented (verified, committed), not planned (reason in
+`DECISIONS.md`), or blocked (left open, with the missing resource named in
+`PROGRESS.md`). "Nobody has decided yet" is not one of them; `LOOP.md` §30
+applies.
 
 **This repository is public.** Never paste user code under review into an
 issue, a document, or a comment — record the *pattern*, never the code. See

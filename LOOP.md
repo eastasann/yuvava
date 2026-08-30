@@ -54,7 +54,7 @@ Agent は原則として、
 | `DECISIONS.md` | why the current durable design choices were made |
 | `PROGRESS.md` | where development currently stands |
 | `git` | implementation history |
-| GitHub Issues | 実利用からの観測の受け口（`feedback` ラベル） |
+| GitHub Issues | 観測の受け口と作業backlog（§2.2） |
 
 原則：
 
@@ -69,15 +69,22 @@ Agent は原則として、
 このルールが破られた場合、次のAgentは同じ調査・同じ判断・同じ失敗を繰り返す。
 それを防ぐことが §24 Context Recovery と §25 Loop Handoff の目的である。
 
-### 2.2 Feedback は Issue で受け、結論をrepositoryに残す
+### 2.2 Issue は入口、repository は結論の記憶
 
-実利用からの観測は GitHub Issues（`feedback` ラベル）で受け取る。
+GitHub Issues は二役を持つ。
 
-    Issue      = 生の観測の受け口（一時的・編集可能・削除可能）
+    Issue      = 実利用からの観測の受け口（`feedback`）
+               + 作業backlog（`enhancement` / `verification` / `quality` /
+                 `blocked-on-design`）
     Repository = そこから得た結論の記憶
 
+どちらも一時的・編集可能・削除可能であることが利点である。観測は生のまま受け取れ、
+作業項目は着手前に何度でも書き換えられる。**未着手作業の一覧の正は Issue 側**で、
+`PROGRESS.md` はそれを要約して参照する（二重管理にしない）。
+
 Issueをrepositoryの外に置くのは §2.1 の例外ではない。次のAgentが必要とするのは
-個々の報告そのものではなく、そこから導かれた結論だからである。Issueに対応したら、
+個々の報告や個々のbacklog項目そのものではなく、そこから導かれた結論だからである。
+Issueに対応したら、観測・作業のどちらであっても、
 
 - durable な判断 → `DECISIONS.md`
 - 未解決の課題 → `PROGRESS.md`
@@ -88,11 +95,24 @@ Issueをrepositoryの外に置くのは §2.1 の例外ではない。次のAgen
 feedbackはAgentの推測より優先する。ただし `SPEC.md` を上書きはしない。矛盾する
 場合は §8.4 の escalation 対象になりうる。
 
-**Issueは溜めて、まとめて1ループで処理する。** 1件届くたびにループを起こさない。
-open な feedback Issue が1件あるだけの状態は、作業を開始する理由にならない。
-複数溜まってから全体を見ると、個別の指摘では見えない傾向 — 同じ種類の誤検知が
-繰り返されている、特定のintensityだけノイズが多い — が見える。プロンプトを直す
-根拠になるのはその傾向であって、単発の事例ではない。
+**`feedback` Issueは溜めて、まとめて1ループで処理する。** 1件届くたびにループを
+起こさない。open な feedback Issue が1件あるだけの状態は、作業を開始する理由に
+ならない。複数溜まってから全体を見ると、個別の指摘では見えない傾向 — 同じ種類の
+誤検知が繰り返されている、特定のintensityだけノイズが多い — が見える。プロンプトを
+直す根拠になるのはその傾向であって、単発の事例ではない。
+
+作業backlogのIssueにはこの制約は掛からない。依存順に1件ずつ処理してよい。ただし
+**1 Issue = 1 commit** とし、まとめて1つのcommitにしない。どのIssueがどの変更を
+生んだかがgit履歴から追えなくなる。
+
+Issueを閉じるときは、次の3つの状態のいずれかに到達していること。「まだ誰も決めて
+いない」は状態ではない（§30）。
+
+| 状態 | 扱い |
+| --- | --- |
+| implemented | 検証し、commitし、閉じる |
+| not planned | 閉じる。理由を `DECISIONS.md` に書く |
+| blocked | openのまま。**何が足りないのか**を `PROGRESS.md` に名指しで書く |
 
 > **このrepositoryは public である。**
 
@@ -689,7 +709,8 @@ durable な判断を行った場合、`DECISIONS.md` への記録は **必須** 
 4. `PROGRESS.md` — どこまで進んでいるか、既知の問題は何か
 5. `git status` / `git diff` — 未コミットの変更が残っていないか
 6. `git log --oneline -20` — 直近で何が起きたか
-7. open な GitHub Issues — 特に `feedback` ラベル（§2.2）
+7. open な GitHub Issues — 観測（`feedback`）と作業backlogの両方（§2.2）。
+   **未着手作業の一覧の正はここ**であって `PROGRESS.md` ではない
 8. 未解決のレビュー指摘
 9. 関連するテスト — 何が保証されていて、何が保証されていないか
 
