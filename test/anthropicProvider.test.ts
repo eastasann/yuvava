@@ -37,6 +37,10 @@ function messageWith(text: string, stopReason = 'end_turn'): unknown {
   };
 }
 
+function messageWithUsage(usage: unknown): unknown {
+  return { ...(messageWith('{"issues":[]}') as Record<string, unknown>), usage };
+}
+
 function providerReturning(
   response: Response | (() => Promise<Response>),
   captured: CapturedRequest[] = [],
@@ -221,5 +225,27 @@ describe('AnthropicReviewProvider responses', () => {
   it('survives a non-JSON response body', async () => {
     const provider = providerReturning(new Response('<html>gateway</html>', { status: 502 }));
     await assert.rejects(() => provider.review(REQUEST), ReviewUnavailableError);
+  });
+});
+
+describe('AnthropicReviewProvider usage', () => {
+  it('reports what the request cost, thinking tokens included', async () => {
+    const provider = providerReturning(
+      jsonResponse(
+        messageWithUsage({
+          input_tokens: 4210,
+          output_tokens: 1830,
+          output_tokens_details: { thinking_tokens: 1204 },
+        }),
+      ),
+    );
+    const response = await provider.review(REQUEST);
+    assert.deepEqual(response.usage, { input: 4210, output: 1830, thinking: 1204 });
+  });
+
+  it('reports nothing rather than zero when the field is missing', async () => {
+    const provider = providerReturning(jsonResponse(messageWithUsage(undefined)));
+    const response = await provider.review(REQUEST);
+    assert.equal(response.usage, undefined);
   });
 });

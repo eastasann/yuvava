@@ -1,5 +1,13 @@
 import * as vscode from 'vscode';
-import { PROVIDER_KINDS, REVIEW_INTENSITIES, type ProviderKind, type ReviewIntensity } from '../core/types.js';
+import type { CreateProviderOptions } from '../core/providerFactory.js';
+import {
+  PROVIDER_KINDS,
+  REVIEW_EFFORTS,
+  REVIEW_INTENSITIES,
+  type ProviderKind,
+  type ReviewEffort,
+  type ReviewIntensity,
+} from '../core/types.js';
 
 export interface NavigatorConfig {
   readonly provider: ProviderKind;
@@ -8,6 +16,8 @@ export interface NavigatorConfig {
   /** Blank means OpenAI itself; set for an OpenAI-compatible endpoint. */
   readonly openaiBaseUrl: string;
   readonly intensity: ReviewIntensity;
+  /** Blank means the provider's own default. */
+  readonly effort: ReviewEffort;
   readonly diffBase: string;
   readonly includeUntracked: boolean;
   readonly maxDiffBytes: number;
@@ -37,6 +47,23 @@ export function currentWorkspaceFolder(): vscode.WorkspaceFolder | undefined {
   return vscode.workspace.workspaceFolders?.[0];
 }
 
+/**
+ * The settings that describe *which* model answers, in the shape the factory
+ * wants. One place, so a new setting reaches every command at once.
+ */
+export function providerOptions(
+  config: NavigatorConfig,
+  apiKey: string,
+): CreateProviderOptions {
+  return {
+    kind: config.provider,
+    apiKey,
+    model: config.model,
+    baseUrl: config.openaiBaseUrl,
+    effort: config.effort,
+  };
+}
+
 export function readConfig(scope?: vscode.Uri): NavigatorConfig {
   const section = vscode.workspace.getConfiguration('navigator', scope);
 
@@ -45,6 +72,7 @@ export function readConfig(scope?: vscode.Uri): NavigatorConfig {
     model: section.get<string>('model', '').trim(),
     openaiBaseUrl: section.get<string>('openaiBaseUrl', '').trim(),
     intensity: oneOf(section.get('reviewIntensity'), REVIEW_INTENSITIES, 'normal'),
+    effort: oneOf(section.get('effort'), REVIEW_EFFORTS, ''),
     diffBase: section.get<string>('diffBase', 'HEAD').trim() || 'HEAD',
     includeUntracked: section.get<boolean>('includeUntracked', true) !== false,
     maxDiffBytes: positiveNumber(section.get('maxDiffBytes'), 200000),

@@ -17,7 +17,7 @@ import { MdnDocsIndex, resolveDocsLinks, type DocsLink } from '../core/docsIndex
 import { createReviewProvider } from '../core/providerFactory.js';
 import { ReviewUnavailableError } from '../core/provider.js';
 import { searchUrl } from '../core/search.js';
-import { currentWorkspaceFolder, readConfig } from './config.js';
+import { currentWorkspaceFolder, providerOptions, readConfig } from './config.js';
 import { promptForMissingApiKey, resolveApiKey } from './apiKey.js';
 import { MORE_SPECIFIC } from './guidance.js';
 import type { NavigatorStatusBar } from './statusBar.js';
@@ -110,12 +110,7 @@ export async function whatWasItCalled(
   try {
     report = await runRecall({
       description,
-      provider: createReviewProvider({
-        kind: config.provider,
-        apiKey,
-        model: config.model,
-        baseUrl: config.openaiBaseUrl,
-      }),
+      provider: createReviewProvider(providerOptions(config, apiKey)),
     });
   } catch (error) {
     const reason = error instanceof ReviewUnavailableError ? error.message : String(error);

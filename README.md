@@ -115,7 +115,7 @@ from the VS Code command palette.
 | `Navigator: Clear Observations` | Removes Navigator's diagnostics. |
 | `Navigator: Set API Key` | Stores the active provider's API key in secret storage. |
 | `Navigator: Clear API Key` | Removes the active provider's stored key. |
-| `Navigator: Show Log` | Opens the Navigator output channel. |
+| `Navigator: Show Log` | Opens the Navigator output channel — including what each request cost in tokens. |
 
 ## Settings
 
@@ -125,6 +125,7 @@ from the VS Code command palette.
 | `navigator.model` | *(provider default)* | `claude-opus-5` or `gpt-5.1-codex-max` unless set. |
 | `navigator.openaiBaseUrl` | *(empty)* | An OpenAI-compatible endpoint to use instead of OpenAI. |
 | `navigator.reviewIntensity` | `normal` | `silent`, `normal` or `strict` (SPEC §15). |
+| `navigator.effort` | *(empty)* | How hard the model thinks before answering. Empty means the model's own default. |
 | `navigator.diffBase` | `HEAD` | Revision the working tree is compared against. |
 | `navigator.includeUntracked` | `true` | Also review new, untracked files. |
 | `navigator.maxDiffBytes` | `200000` | Diffs above this size are not sent. |

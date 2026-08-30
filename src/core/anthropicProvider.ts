@@ -14,6 +14,8 @@ import { buildRecallSystemPrompt, buildRecallUserPrompt } from './recallPrompt.j
 import { REVIEW_OUTPUT_SCHEMA } from './schema.js';
 import { GUIDANCE_OUTPUT_SCHEMA } from './guidanceSchema.js';
 import { RECALL_OUTPUT_SCHEMA } from './recallSchema.js';
+import { readUsage } from './usage.js';
+import type { ReviewEffort } from './types.js';
 import {
   ReviewUnavailableError,
   type GuidanceProvider,
@@ -35,6 +37,8 @@ const FALLBACK_BETA = 'server-side-fallback-2026-07-01';
 export interface AnthropicProviderOptions {
   readonly apiKey: string;
   readonly model?: string;
+  /** Absent or empty leaves the model's own default in place. */
+  readonly effort?: ReviewEffort;
   /** Custom fetch implementation. Used by tests to pin the request shape. */
   readonly fetch?: typeof globalThis.fetch;
 }
@@ -42,6 +46,7 @@ export interface AnthropicProviderOptions {
 export class AnthropicReviewProvider implements ReviewProvider, GuidanceProvider, RecallProvider {
   private readonly client: Anthropic;
   private readonly model: string;
+  private readonly effort: ReviewEffort;
 
   constructor(options: AnthropicProviderOptions) {
     this.client = new Anthropic({
@@ -52,6 +57,7 @@ export class AnthropicReviewProvider implements ReviewProvider, GuidanceProvider
       ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
     });
     this.model = options.model?.trim() || DEFAULT_ANTHROPIC_MODEL;
+    this.effort = options.effort ?? '';
   }
 
   review(request: ReviewRequest): Promise<ProviderResponse> {
@@ -101,6 +107,9 @@ export class AnthropicReviewProvider implements ReviewProvider, GuidanceProvider
           messages: [{ role: 'user', content: user }],
           output_config: {
             format: { type: 'json_schema', schema: schema as Record<string, unknown> },
+            // Omitted entirely when unset, so the model's own default applies
+            // rather than Navigator picking one on the developer's behalf.
+            ...(this.effort === '' ? {} : { effort: this.effort }),
           },
           betas: [FALLBACK_BETA],
           fallbacks: 'default',
@@ -125,7 +134,8 @@ export class AnthropicReviewProvider implements ReviewProvider, GuidanceProvider
       throw new ReviewUnavailableError('the model returned an empty response');
     }
 
-    return { text };
+    const usage = readUsage(message.usage);
+    return usage === undefined ? { text } : { text, usage };
   }
 }
 

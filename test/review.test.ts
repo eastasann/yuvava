@@ -57,7 +57,7 @@ describe('runReview', () => {
     assert.equal(report.observations[0].file, 'src/cart.ts');
     assert.equal(report.observations[0].line, 10);
     assert.equal(report.observations[0].symbol, 'count');
-    assert.deepEqual(report.notes, []);
+    assert.deepEqual(report.notes, ['tokens: not reported by this endpoint']);
   });
 
   it('sends the model a diff annotated with new-file line numbers', async () => {
@@ -89,7 +89,7 @@ describe('runReview', () => {
     const report = await runReview({ ...BASE, diff: DIFF, provider: providerReturning('{"issues":[]}') });
     assert.equal(report.status, 'reviewed');
     assert.deepEqual(report.observations, []);
-    assert.deepEqual(report.notes, []);
+    assert.deepEqual(report.notes, ['tokens: not reported by this endpoint']);
   });
 
   it('refuses to send an oversized diff', async () => {

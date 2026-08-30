@@ -633,3 +633,55 @@ Invariant:
 `TextEditor` offers `edit` right next to `selection`. `test/invariant.test.ts`
 pins the exact set of members that file calls — `getText` and
 `asRelativePath` — so an edit path there cannot appear quietly.
+
+## Decision: Every request logs what it cost, and "unknown" is a valid answer
+
+`src/core/usage.ts` reads whatever the endpoint reported and each pipeline
+appends one line to its notes, which the extension writes to the log.
+
+Reason:
+For this job — small input, thinking before answering — reasoning tokens are
+billed at the output rate and dominate the total, so the cost of one review
+could only be stated as a range three times as wide as its own midpoint. That
+range is the reason both "should the default effort change" (#20) and "is the
+review any good per unit cost" (#17) were unanswerable. One real number ends
+it, and it costs one line per request.
+
+Three wire shapes, one reader: Anthropic and the OpenAI Responses API report
+`input_tokens` / `output_tokens`; Chat Completions reports `prompt_tokens` /
+`completion_tokens`; thinking tokens hide in a details object under either
+`thinking_tokens` or `reasoning_tokens`.
+
+Consequence:
+An OpenAI-compatible endpoint that reports nothing logs
+"tokens: not reported by this endpoint" and carries on. Half the point of the
+compatible path is endpoints that implement only part of the API, so a missing
+`usage` must never be an error. The note goes last in the list so it can never
+displace a warning.
+
+## Decision: Effort is a setting, and its default stays "whatever the model does"
+
+`navigator.effort` reaches `output_config.effort` on Anthropic and
+`reasoning_effort` / `reasoning.effort` on OpenAI. Unset — the default — sends
+nothing at all, so the request is byte-for-byte what it was before the setting
+existed.
+
+Reason for adding it at all:
+`LOOP.md` §6.6 says not to grow a configuration system, and this is the
+exception that earns itself: for this job the input is small and the thinking
+dominates the bill, so effort is the one setting that changes what a review
+costs. That is not a preference, it is a budget.
+
+Reason the default does not move:
+Lowering it would be cheaper and might be worse, and nobody has measured which.
+#19 made the cost visible and #17 makes the quality measurable; changing the
+default before both have been run against a real endpoint would be swapping a
+known default for a guess. When it does move, the measurement goes here.
+
+Consequences:
+- `xhigh` and `max` have no OpenAI counterpart and are sent as `high` rather
+  than dropped: the developer asked for as much thinking as possible, and that
+  is as much as that provider has.
+- Nothing is sent to an OpenAI-compatible endpoint unless the setting is
+  explicitly set, so an endpoint that rejects `reasoning_effort` is only
+  reachable by someone who asked for it.

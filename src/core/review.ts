@@ -10,6 +10,7 @@ import { parseUnifiedDiff, renderAnnotatedDiff, reviewableFiles, type DiffFile }
 import { parseReviewResponse } from './schema.js';
 import { anchorIssues } from './anchor.js';
 import { ReviewUnavailableError, type ReviewProvider } from './provider.js';
+import { describeUsage } from './usage.js';
 import type { DroppedObservation, Observation, ReviewIntensity } from './types.js';
 
 export interface ReviewOptions {
@@ -97,6 +98,8 @@ export async function runReview(options: ReviewOptions): Promise<ReviewReport> {
   for (const drop of outcome.dropped) {
     notes.push(`discarded ${drop.detail}: ${drop.reason}`);
   }
+  // Last, so it reads as a footer and never displaces a warning.
+  notes.push(describeUsage(response.usage));
 
   return {
     status: 'reviewed',
