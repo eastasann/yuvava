@@ -20,7 +20,9 @@ pass. Treat "it works" as unproven until `npm run smoke` comes back clean, and
 "it is useful" as unproven until `npm run eval` produces numbers.
 
 Both of those first contacts found real defects, which is what first contact is
-for. See Known problems, and the two entries they produced in `DECISIONS.md`.
+for: a reservation that was refused for room it would never use, a log that
+said what failed but not where, and a model name recommended in the docs that
+does not exist. All three are fixed. See Known problems and `DECISIONS.md`.
 
 Read the open issues before this file (`LOOP.md` §2.2): they are the backlog of
 record. Six are open — two blocked on this environment, four waiting on
@@ -47,7 +49,7 @@ Last executed on this tree, Node v22.22.2 / npm 10.9.7, git 2.43.0:
 | --- | --- |
 | `npm run lint` | exit 0, no warnings |
 | `npm run compile` | exit 0 |
-| `node --test "out/test/**/*.test.js"` | exit 0 — **365 pass, 0 fail, 0 skipped**, 78 suites, ~1.1 s |
+| `node --test "out/test/**/*.test.js"` | exit 0 — **377 pass, 0 fail, 0 skipped**, 81 suites, ~1.2 s |
 | `npm run package` | exit 0 — `yuvava.vsix`, 5,527 files, 6.94 MB |
 
 Not runnable in a cloud container, and not part of the gate:
@@ -101,7 +103,9 @@ Re-run the gate before trusting the table above if any source file has changed.
 - Token usage logged for every request.
 - Per-job token budgets, so a question does not reserve a review's worth of
   answer (`test/tokenBudget.test.ts`), and every failure log names the route.
-- 365 tests, including `test/invariant.test.ts` (the §16 guard),
+- Two single retries on the compatible path: a rejected JSON schema, and a
+  refused request size (`test/sizeRetry.test.ts`).
+- 377 tests, including `test/invariant.test.ts` (the §16 guard),
   `test/gitIntegration.test.ts` (real git, and it fails without it), and
   `test/eval.test.ts` (the eval set and scorer).
 
@@ -171,13 +175,12 @@ the two above would produce:
   taken from the providers' documented ladders; that they are accepted is
   unverified, and `xhigh`/`max` are folded to `high` for OpenAI on the same
   basis.
-- **A review may still not fit a small per-minute quota.** Token budgets are now
-  per job, which fixed guidance and recall on a free tier, but a review
-  deliberately keeps 8192 reserved. On an endpoint that bills the reservation
-  against a TPM limit of 8,000, a review of any real diff will not fit. That is
-  a tier limit rather than a defect, and cutting the reservation would trade
-  review quality for one provider's free quota — but it means "guidance works
-  here" does not imply "review works here".
+- **The size retry has never fired against a real endpoint.** A refused request
+  size now costs one extra round trip at half the reservation instead of
+  failing, which is what an 8,000 TPM tier needs for a review to fit at all.
+  `isTokenBudgetRejection` is written against the *observed* Groq wording, so
+  unlike the schema fallback it is not guesswork — but it has still only been
+  exercised against a fixture of that message, never against the server.
 - **The `.vsix` carries both provider SDKs** (6.94 MB, 5,527 files, of which
   Navigator's own output is 152 KB). Deliberate — see `DECISIONS.md` twice over.
 
