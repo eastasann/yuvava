@@ -685,3 +685,23 @@ Consequences:
 - Nothing is sent to an OpenAI-compatible endpoint unless the setting is
   explicitly set, so an endpoint that rejects `reasoning_effort` is only
   reachable by someone who asked for it.
+
+## Decision: `npm run verify` requires git, and the git suite fails without it
+
+`test/gitIntegration.test.ts` used to skip itself when `git --version` failed.
+It now asserts git is present and fails when it is not.
+
+Reason:
+It is the only coverage of the real `execFile` path and of git's actual diff
+output. Skipping made a green run ambiguous: the same "all tests pass" line
+appeared whether the product's one real integration ran or not, and telling the
+difference meant noticing a skip count in a summary nobody reads. A test that
+can silently not run is worse than one that is missing, because it is counted.
+
+Why requiring git is not a burden:
+Navigator does nothing at all without git. Requiring it to *develop* Navigator
+is not a new dependency, it is the same one, stated. `AGENTS.md` says so under
+Commands.
+
+Verified: with `PATH` emptied, the suite fails with a named assertion rather
+than reporting zero failures.
