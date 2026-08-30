@@ -191,10 +191,36 @@ Codex-family models; a Codex model is the right default for a job that is
 entirely diff reading. `status === 'incomplete'` is treated as a failed review
 rather than parsed, so a truncated response never becomes half a review.
 
+## Decision: Feedback arrives as GitHub Issues, not as files in the repository
+
+Real-world observations are filed as issues with the `feedback` label
+(`.github/ISSUE_TEMPLATE/feedback.md`). Issues are the inbox; the repository
+stays the memory. Acting on one means putting the durable part in
+`DECISIONS.md`, the unresolved part in `PROGRESS.md`, and closing the issue.
+
+Reason:
+Two things a `feedback/` directory got wrong. Filing feedback would have
+required a clone, a commit and a push — and feedback that is expensive to file
+does not get filed. More seriously, **this repository is public**, and useful
+feedback quotes the code that was under review: real work code, published
+permanently, with no clean way to remove it from git history. An issue can be
+edited or deleted.
+
+This is not an exception to "the repository is the memory" (`LOOP.md` §2.1).
+What the next agent needs is the conclusion, not the individual report, and
+conclusions still land in the repository. A closed issue can be lost without
+losing anything that mattered.
+
+Consequence:
+`LOOP.md` §2.2 forbids pasting user code under review into an issue, a
+document, or a comment — the pattern is recorded, never the code. The issue
+template repeats the rule at the moment of writing, which is when it matters;
+a policy file nobody opens would not have.
+
 ## Decision: The repository is the persistent memory, not the conversation
 
 `SPEC.md` (what), `LOOP.md` (how), `DECISIONS.md` (why), `PROGRESS.md` (where),
-git (history), and `feedback/` if it appears. `LOOP.md` §24 makes context
+git (history), and GitHub Issues as the feedback inbox. `LOOP.md` §24 makes context
 recovery from those files mandatory at the start of every session, and §25
 makes a handoff into them mandatory before any loop stops.
 

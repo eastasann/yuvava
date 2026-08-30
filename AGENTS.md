@@ -31,7 +31,7 @@ things that carry across are files:
 | `DECISIONS.md` | why the current durable design choices were made |
 | `PROGRESS.md` | where development currently stands |
 | `git` | implementation history |
-| `feedback/` | observations from real-world usage, if present |
+| GitHub Issues | where real-world observations arrive (`feedback` label) |
 
 Two procedures in `LOOP.md` are mandatory, not advisory:
 
@@ -46,6 +46,16 @@ Two procedures in `LOOP.md` are mandatory, not advisory:
 
 Anything known only to you at the end of a session is lost. If the next agent
 needs it, write it down.
+
+Feedback from real use arrives as GitHub Issues, not as files: they are cheap
+to file, and editable and deletable, which files in git history are not. Issues
+are the inbox; the repository is the memory. When you act on one, put the
+durable part in `DECISIONS.md`, the unresolved part in `PROGRESS.md`, and close
+the issue.
+
+**This repository is public.** Never paste user code under review into an
+issue, a document, or a comment — record the *pattern*, never the code. See
+`LOOP.md` §2.2.
 
 ## The one rule you may not break
 

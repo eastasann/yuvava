@@ -10,9 +10,19 @@ The MVP is complete and verified. `SPEC.md` §19 Required is fully implemented,
 plus two Optional items (status bar, review intensity). Untracked files are
 reviewed, and both Anthropic and OpenAI can act as the reviewer.
 
-The first development loop has ended. No feature work is in progress and the
-working tree is clean. A fresh session can pick the next item from
-**Remaining** below.
+No feature work is in progress and the working tree is clean.
+
+**Navigator has not been used against real code yet.** It is distributed by
+local install (`npm run install:local`, or a `.vsix` handed over directly) and
+the owner is about to try it for the first time. Until that happens, the three
+entries under **Known problems** are all still unproven in the same way: no
+request has ever reached a provider, and no review has ever been read by a
+human.
+
+The next loop is expected to be driven by that first real use, arriving as
+`feedback`-labelled issues. Per `LOOP.md` §2.2 those are **batched**: wait for
+several before starting a loop, and work the pattern across them rather than
+the individual reports.
 
 ## Verification
 
@@ -29,8 +39,7 @@ npm run package   # produces yuvava.vsix
 npm run install:local  # verify + build + install into VS Code (human path)
 ```
 
-Last executed on this tree (the handoff commit, Markdown-only on top of
-`516eeb6`), Node v22.22.2 / npm 10.9.7:
+Last executed on this tree, Node v22.22.2 / npm 10.9.7:
 
 | Command | Result |
 | --- | --- |
@@ -86,7 +95,11 @@ Not started, and each is a deliberate hold rather than an oversight.
   problems). Needs debounce/cooldown when it happens.
 - **Review history.** No demand established.
 - **Live confirmation of both providers.** See Known problems; this is the
-  highest-value next step and needs only an API key.
+  highest-value next step and needs only an API key. It is likely to be
+  answered by the owner's first real use rather than by a development loop.
+- **A `feedback` label does not exist in the repository yet.** The issue
+  template names it, which works from the web UI; creating an issue through
+  the API needs the label created first.
 
 ## Known problems
 
@@ -128,7 +141,10 @@ Not started, and each is a deliberate hold rather than an oversight.
 - Distribution is a locally built `.vsix` (`npm run install:local`), not the
   Marketplace — see `DECISIONS.md`. `publisher` is therefore a deliberate
   placeholder and the extension id is `navigator.yuvava`. Do not "fix" it.
-- No `feedback/` directory exists yet. If real-world usage starts producing
-  observations, that is where they go (`LOOP.md` §2.1). Now that the extension
-  is being installed and used locally, this is the likeliest source of the
-  next loop's work — particularly for "review quality is unmeasured" above.
+- Feedback from real use arrives as GitHub Issues labelled `feedback`, not as
+  files (`LOOP.md` §2.2, and the reasoning in `DECISIONS.md`). Check open
+  issues during context recovery. Now that the extension is installed and in
+  use, this is the likeliest source of the next loop's work — particularly for
+  "review quality is unmeasured" above.
+- **This repository is public.** Never put user code that was under review into
+  an issue, a document or a comment. Record the pattern, not the code.

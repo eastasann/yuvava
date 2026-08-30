@@ -54,7 +54,7 @@ Agent は原則として、
 | `DECISIONS.md` | why the current durable design choices were made |
 | `PROGRESS.md` | where development currently stands |
 | `git` | implementation history |
-| `feedback/` | observations from real-world usage, if present |
+| GitHub Issues | 実利用からの観測の受け口（`feedback` ラベル） |
 
 原則：
 
@@ -69,9 +69,45 @@ Agent は原則として、
 このルールが破られた場合、次のAgentは同じ調査・同じ判断・同じ失敗を繰り返す。
 それを防ぐことが §24 Context Recovery と §25 Loop Handoff の目的である。
 
-`feedback/` が存在する場合、それは実際の利用から得られた観測であり、Agentの
-推測より優先する。ただし `SPEC.md` を上書きはしない。矛盾する場合は §8.4 の
-escalation 対象になりうる。
+### 2.2 Feedback は Issue で受け、結論をrepositoryに残す
+
+実利用からの観測は GitHub Issues（`feedback` ラベル）で受け取る。
+
+    Issue      = 生の観測の受け口（一時的・編集可能・削除可能）
+    Repository = そこから得た結論の記憶
+
+Issueをrepositoryの外に置くのは §2.1 の例外ではない。次のAgentが必要とするのは
+個々の報告そのものではなく、そこから導かれた結論だからである。Issueに対応したら、
+
+- durable な判断 → `DECISIONS.md`
+- 未解決の課題 → `PROGRESS.md`
+- 実装上の注意 → コード中のコメント
+
+に残した上でIssueを閉じる。閉じたIssueが失われても、結論はrepositoryに残る。
+
+feedbackはAgentの推測より優先する。ただし `SPEC.md` を上書きはしない。矛盾する
+場合は §8.4 の escalation 対象になりうる。
+
+**Issueは溜めて、まとめて1ループで処理する。** 1件届くたびにループを起こさない。
+open な feedback Issue が1件あるだけの状態は、作業を開始する理由にならない。
+複数溜まってから全体を見ると、個別の指摘では見えない傾向 — 同じ種類の誤検知が
+繰り返されている、特定のintensityだけノイズが多い — が見える。プロンプトを直す
+根拠になるのはその傾向であって、単発の事例ではない。
+
+> **このrepositoryは public である。**
+
+Issueにも、repositoryのどのファイルにも、レビュー対象になった実際のユーザー
+コードを貼らない。業務コードや他プロジェクトの断片が公開され、git履歴からは
+取り消せない。残すのはコードではなくパターンである。
+
+    ✗ src/billing/invoice.ts:142 で amount が null と指摘された
+      該当コード: const total = invoice.amount * rate;
+
+    ✓ 誤検知: 呼び出し元でガード済みの値に null 指摘が出る。
+      関数境界をまたいだガードを追えていない。
+
+後者は実コードを含まないのに `src/core/prompt.ts` のどこを直すべきかを特定できる。
+再現に最小限のコードが要る場合は、書き直した例を使う。
 
 ---
 
@@ -653,8 +689,8 @@ durable な判断を行った場合、`DECISIONS.md` への記録は **必須** 
 4. `PROGRESS.md` — どこまで進んでいるか、既知の問題は何か
 5. `git status` / `git diff` — 未コミットの変更が残っていないか
 6. `git log --oneline -20` — 直近で何が起きたか
-7. `feedback/` — 存在する場合、実利用からの観測
-8. 未解決の feedback / issue / レビュー指摘
+7. open な GitHub Issues — 特に `feedback` ラベル（§2.2）
+8. 未解決のレビュー指摘
 9. 関連するテスト — 何が保証されていて、何が保証されていないか
 
 ### 24.2 復元後に確認すること
