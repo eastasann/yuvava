@@ -115,7 +115,7 @@ from the VS Code command palette.
 | `Navigator: Clear Observations` | Removes Navigator's diagnostics. |
 | `Navigator: Set API Key` | Stores the active provider's API key in secret storage. |
 | `Navigator: Clear API Key` | Removes the active provider's stored key. |
-| `Navigator: Show Log` | Opens the Navigator output channel. |
+| `Navigator: Show Log` | Opens the Navigator output channel — including what each request cost in tokens. |
 
 ## Settings
 

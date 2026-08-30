@@ -14,6 +14,7 @@ import { buildRecallSystemPrompt, buildRecallUserPrompt } from './recallPrompt.j
 import { REVIEW_OUTPUT_SCHEMA } from './schema.js';
 import { GUIDANCE_OUTPUT_SCHEMA } from './guidanceSchema.js';
 import { RECALL_OUTPUT_SCHEMA } from './recallSchema.js';
+import { readUsage } from './usage.js';
 import {
   ReviewUnavailableError,
   type GuidanceProvider,
@@ -125,7 +126,8 @@ export class AnthropicReviewProvider implements ReviewProvider, GuidanceProvider
       throw new ReviewUnavailableError('the model returned an empty response');
     }
 
-    return { text };
+    const usage = readUsage(message.usage);
+    return usage === undefined ? { text } : { text, usage };
   }
 }
 

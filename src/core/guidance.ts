@@ -12,6 +12,7 @@
 
 import { parseGuidanceResponse, type GuidanceTopic } from './guidanceSchema.js';
 import { ReviewUnavailableError, type GuidanceProvider } from './provider.js';
+import { describeUsage } from './usage.js';
 
 /** Longer than this and it is not a question, it is a specification. */
 export const MAX_QUESTION_LENGTH = 500;
@@ -87,6 +88,6 @@ export async function runGuidance(options: GuidanceOptions): Promise<GuidanceRep
     searches: parsed.searches,
     hints: parsed.hints,
     explore: parsed.explore,
-    notes: [...(response.warnings ?? []), ...parsed.problems],
+    notes: [...(response.warnings ?? []), ...parsed.problems, describeUsage(response.usage)],
   };
 }

@@ -633,3 +633,28 @@ Invariant:
 `TextEditor` offers `edit` right next to `selection`. `test/invariant.test.ts`
 pins the exact set of members that file calls — `getText` and
 `asRelativePath` — so an edit path there cannot appear quietly.
+
+## Decision: Every request logs what it cost, and "unknown" is a valid answer
+
+`src/core/usage.ts` reads whatever the endpoint reported and each pipeline
+appends one line to its notes, which the extension writes to the log.
+
+Reason:
+For this job — small input, thinking before answering — reasoning tokens are
+billed at the output rate and dominate the total, so the cost of one review
+could only be stated as a range three times as wide as its own midpoint. That
+range is the reason both "should the default effort change" (#20) and "is the
+review any good per unit cost" (#17) were unanswerable. One real number ends
+it, and it costs one line per request.
+
+Three wire shapes, one reader: Anthropic and the OpenAI Responses API report
+`input_tokens` / `output_tokens`; Chat Completions reports `prompt_tokens` /
+`completion_tokens`; thinking tokens hide in a details object under either
+`thinking_tokens` or `reasoning_tokens`.
+
+Consequence:
+An OpenAI-compatible endpoint that reports nothing logs
+"tokens: not reported by this endpoint" and carries on. Half the point of the
+compatible path is endpoints that implement only part of the API, so a missing
+`usage` must never be an error. The note goes last in the list so it can never
+displace a warning.

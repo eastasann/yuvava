@@ -128,8 +128,9 @@ describe('git integration', { skip: gitAvailable() ? false : 'git is not install
     assert.equal(report.observations.length, 1);
     assert.equal(report.observations[0].file, 'cart.js');
     assert.equal(report.observations[0].line, 4);
-    assert.equal(report.notes.length, 1);
+    assert.equal(report.notes.length, 2);
     assert.match(report.notes[0], /discarded cart\.js:900/);
+    assert.match(report.notes[1], /^tokens:/);
   });
 
   it('lists untracked files and honours .gitignore', async () => {

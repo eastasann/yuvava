@@ -8,6 +8,7 @@
 
 import { parseRecallResponse, type RecallCandidate } from './recallSchema.js';
 import { ReviewUnavailableError, type RecallProvider } from './provider.js';
+import { describeUsage } from './usage.js';
 
 /** A description of a forgotten name is short by nature. */
 export const MAX_DESCRIPTION_LENGTH = 300;
@@ -47,6 +48,6 @@ export async function runRecall(options: RecallOptions): Promise<RecallReport> {
   return {
     status: 'answered',
     candidates: parsed.candidates,
-    notes: [...(response.warnings ?? []), ...parsed.problems],
+    notes: [...(response.warnings ?? []), ...parsed.problems, describeUsage(response.usage)],
   };
 }

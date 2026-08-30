@@ -12,6 +12,7 @@
  */
 
 import type { ReviewIntensity } from './types.js';
+import type { TokenUsage } from './usage.js';
 
 export interface ReviewRequest {
   /** Diff rendered with new-file line numbers. */
@@ -46,6 +47,8 @@ export interface ProviderResponse {
    * diagnosed; never shown as an observation.
    */
   readonly warnings?: readonly string[];
+  /** What the request cost, when the endpoint says. Logged, never shown. */
+  readonly usage?: TokenUsage;
 }
 
 /** Historic name for {@link ProviderResponse}; the shape is the same. */
