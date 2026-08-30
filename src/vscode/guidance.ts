@@ -17,7 +17,7 @@ import { createReviewProvider } from '../core/providerFactory.js';
 import { ReviewUnavailableError } from '../core/provider.js';
 import { searchUrl } from '../core/search.js';
 import type { GuidanceReport } from '../core/guidance.js';
-import { currentWorkspaceFolder, providerOptions, readConfig } from './config.js';
+import { currentWorkspaceFolder, describeRoute, providerOptions, readConfig } from './config.js';
 import { promptForMissingApiKey, resolveApiKey } from './apiKey.js';
 import { readSelection } from './selection.js';
 import type { NavigatorStatusBar } from './statusBar.js';
@@ -168,7 +168,7 @@ export async function whereShouldILook(
     });
   } catch (error) {
     const reason = error instanceof ReviewUnavailableError ? error.message : String(error);
-    log.warn(`guidance unavailable: ${reason}`);
+    log.warn(`guidance unavailable via ${describeRoute(config)}: ${reason}`);
     void vscode.window.showWarningMessage(`Navigator: ${reason}`);
     return;
   } finally {

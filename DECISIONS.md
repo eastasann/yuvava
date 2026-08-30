@@ -888,3 +888,49 @@ The approach is settled and the sequencing is not negotiable:
 
 Not started, on purpose: without a measurement, adding context is a change that
 triples the input cost on a hope. `PROGRESS.md` records what it is waiting for.
+
+## Decision: A job reserves the tokens it needs, not the maximum
+
+`max_tokens` / `max_output_tokens` is per job: a review gets 8192 on the OpenAI
+path and 4096 on Anthropic, guidance 2048, recall 1024. It used to be one
+constant for all three.
+
+Reason — and this is the first thing real use found:
+A `Where Should I Look?` request carrying **1,194 tokens of input was refused
+with a 413 at 9,386 tokens**. The difference is the 8,192 reserved for the
+answer. Groq's free tier bills the *reservation* against its tokens-per-minute
+limit rather than the tokens actually produced, so a question whose answer is a
+handful of short strings could never succeed — no amount of waiting would help,
+because a single request exceeded the per-minute limit on its own.
+
+Asking for the maximum on every job was waste everywhere and a hard failure on
+one endpoint. Nothing in this repository could have found it: the wire tests
+assert what is *sent*, and 8192 was sent correctly.
+
+Consequences:
+- A review keeps its room. Reasoning models spend tokens before answering and
+  there may be up to `maxObservations` findings, so cutting it to fit one free
+  tier would trade review quality for someone else's quota.
+- The numbers stay constants rather than settings. `LOOP.md` §6.6: a knob here
+  would be a configuration system for a value the developer cannot reason about
+  better than the code can.
+- `test/tokenBudget.test.ts` pins the ordering (review > guidance ≥ recall) and
+  that a question plus a realistic input fits inside 8,000 — the limit that was
+  actually hit, rather than a number chosen for looking round.
+
+## Decision: A failed request says where it went
+
+Every failure log now names the provider, model, endpoint and effort —
+`describeRoute` in `src/vscode/config.ts`, shared with the success line.
+
+Reason:
+Also from real use. Two failures in a row — a 404 about a model, then a 413
+about a rate limit — and in both cases the log said what went wrong without
+saying which endpoint said it. That is the moment the route matters *most*: a
+404 for `llama-3.3-70b-versatile` means one thing if the request went to Groq
+and another entirely if it went to OpenAI, and the log could not tell them
+apart. Naming the route only on success is exactly backwards.
+
+Consequence:
+A git failure passes no route, because nothing was sent and naming an endpoint
+would imply otherwise.

@@ -12,11 +12,15 @@ The four surfaces §12 asks for — Diagnostics, Problems panel, Hover, Status B
 
 The working tree is clean and `npm run verify` is green.
 
-**Nothing here has ever been used against a real endpoint, or inside a real
-VS Code.** That single fact is the whole of what is left, and everything still
-open traces back to it. Anything below that sounds like a capability is a
-capability whose *tests* pass; treat "it works" as unproven until `npm run
-smoke` has been run once by someone with an API key.
+**A real endpoint has answered, but has never yet succeeded.** Groq returned a
+404 and then a 413 to real requests — which confirms the wire format, the auth
+and the error path, and confirms nothing about whether a review is any good.
+Anything below that sounds like a capability is a capability whose *tests*
+pass. Treat "it works" as unproven until `npm run smoke` comes back clean, and
+"it is useful" as unproven until `npm run eval` produces numbers.
+
+Both of those first contacts found real defects, which is what first contact is
+for. See Known problems, and the two entries they produced in `DECISIONS.md`.
 
 Read the open issues before this file (`LOOP.md` §2.2): they are the backlog of
 record. Six are open — two blocked on this environment, four waiting on
@@ -43,14 +47,14 @@ Last executed on this tree, Node v22.22.2 / npm 10.9.7, git 2.43.0:
 | --- | --- |
 | `npm run lint` | exit 0, no warnings |
 | `npm run compile` | exit 0 |
-| `node --test "out/test/**/*.test.js"` | exit 0 — **360 pass, 0 fail, 0 skipped**, 75 suites, ~1.1 s |
+| `node --test "out/test/**/*.test.js"` | exit 0 — **365 pass, 0 fail, 0 skipped**, 78 suites, ~1.1 s |
 | `npm run package` | exit 0 — `yuvava.vsix`, 5,527 files, 6.94 MB |
 
 Not runnable in a cloud container, and not part of the gate:
 
 | Command | Needs | Last run |
 | --- | --- | --- |
-| `npm run smoke` | an API key | **never** — see Known problems |
+| `npm run smoke` | an API key | **never** — but the same paths have been exercised from the extension; see Known problems |
 | `npm run eval` | an API key | **never** — see Known problems |
 | `npm run test:host` | a real VS Code (display or `xvfb-run`) | **never** — VS Code cannot even be downloaded here |
 | `npm run install:local` | a real VS Code and the `code` CLI | the owner's machine |
@@ -95,7 +99,9 @@ Re-run the gate before trusting the table above if any source file has changed.
 - Status bar (§12.2), review intensity (§15), hover (§12).
 - `navigator.effort` — the cost dial. Default unset.
 - Token usage logged for every request.
-- 360 tests, including `test/invariant.test.ts` (the §16 guard),
+- Per-job token budgets, so a question does not reserve a review's worth of
+  answer (`test/tokenBudget.test.ts`), and every failure log names the route.
+- 365 tests, including `test/invariant.test.ts` (the §16 guard),
   `test/gitIntegration.test.ts` (real git, and it fails without it), and
   `test/eval.test.ts` (the eval set and scorer).
 
@@ -136,14 +142,15 @@ the two above would produce:
 
 ## Known problems
 
-- **No live API call has ever been made, against any endpoint.** No keys exist
-  in this environment. The provider tests pin the exact wire request by
-  injecting each SDK's `fetch`, so request shape, headers and every response
-  branch are verified — but no server has ever accepted these requests. The
-  compatible-endpoint path is the least proven: `isStructuredOutputRejection`
-  matches on error *wording*, which was written against an expectation rather
-  than an observed failure. One real error message fixes it. Run
-  `npm run smoke`.
+- **A real endpoint has now answered — with errors, twice.** Groq
+  (`https://api.groq.com/openai/v1`, `openai/gpt-oss-120b`) returned a 404 for a
+  stale model name and then a 413 for a rate limit. Both arrived as structured
+  API errors and were surfaced without breaking anything, so the request shape,
+  the headers, the auth and the error path are **confirmed on the wire**. What
+  is still unproven is a *successful* review: no endpoint has yet returned an
+  answer that became an observation, and the schema-fallback path
+  (`isStructuredOutputRejection`, which matches on error wording written against
+  an expectation) has still never fired. Run `npm run smoke`.
 - **Review quality is unmeasured.** `test/eval/` now makes it measurable —
   nine invented diffs, four numbers per intensity — but `npm run eval` has
   never been run against a model. The offline eval scores hand-written answers
@@ -164,6 +171,13 @@ the two above would produce:
   taken from the providers' documented ladders; that they are accepted is
   unverified, and `xhigh`/`max` are folded to `high` for OpenAI on the same
   basis.
+- **A review may still not fit a small per-minute quota.** Token budgets are now
+  per job, which fixed guidance and recall on a free tier, but a review
+  deliberately keeps 8192 reserved. On an endpoint that bills the reservation
+  against a TPM limit of 8,000, a review of any real diff will not fit. That is
+  a tier limit rather than a defect, and cutting the reservation would trade
+  review quality for one provider's free quota — but it means "guidance works
+  here" does not imply "review works here".
 - **The `.vsix` carries both provider SDKs** (6.94 MB, 5,527 files, of which
   Navigator's own output is 152 KB). Deliberate — see `DECISIONS.md` twice over.
 

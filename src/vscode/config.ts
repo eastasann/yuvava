@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { CreateProviderOptions } from '../core/providerFactory.js';
+import { providerProfile, type CreateProviderOptions } from '../core/providerFactory.js';
 import {
   PROVIDER_KINDS,
   REVIEW_EFFORTS,
@@ -45,6 +45,24 @@ export function currentWorkspaceFolder(): vscode.WorkspaceFolder | undefined {
     }
   }
   return vscode.workspace.workspaceFolders?.[0];
+}
+
+/**
+ * Where a request is about to go, for the log.
+ *
+ * Written for the failure case. A successful review says which model answered;
+ * a failed one used to say only what went wrong, which is the moment the route
+ * matters most — a 404 about a model, or a rate limit, means nothing until you
+ * know which endpoint said it.
+ */
+export function describeRoute(config: NavigatorConfig): string {
+  const profile = providerProfile(config.provider);
+  const endpoint =
+    config.provider === 'openai' && config.openaiBaseUrl.length > 0
+      ? ` via ${config.openaiBaseUrl}`
+      : '';
+  const effort = config.effort === '' ? '' : ` at effort ${config.effort}`;
+  return `${profile.displayName} ${config.model || profile.defaultModel}${endpoint}${effort}`;
 }
 
 /**

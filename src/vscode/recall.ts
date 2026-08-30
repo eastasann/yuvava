@@ -17,7 +17,7 @@ import { MdnDocsIndex, resolveDocsLinks, type DocsLink } from '../core/docsIndex
 import { createReviewProvider } from '../core/providerFactory.js';
 import { ReviewUnavailableError } from '../core/provider.js';
 import { searchUrl } from '../core/search.js';
-import { currentWorkspaceFolder, providerOptions, readConfig } from './config.js';
+import { currentWorkspaceFolder, describeRoute, providerOptions, readConfig } from './config.js';
 import { promptForMissingApiKey, resolveApiKey } from './apiKey.js';
 import { MORE_SPECIFIC } from './guidance.js';
 import type { NavigatorStatusBar } from './statusBar.js';
@@ -114,7 +114,7 @@ export async function whatWasItCalled(
     });
   } catch (error) {
     const reason = error instanceof ReviewUnavailableError ? error.message : String(error);
-    log.warn(`recall unavailable: ${reason}`);
+    log.warn(`recall unavailable via ${describeRoute(config)}: ${reason}`);
     void vscode.window.showWarningMessage(`Navigator: ${reason}`);
     return;
   } finally {
