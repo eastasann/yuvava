@@ -741,3 +741,43 @@ When to revisit:
 Reading 2, when `feedback` issues show the same observation being ignored
 across several reviews. That report is the demand; until it exists, this would
 be a store, a lifecycle and a settings entry built on a hunch.
+
+## Decision: Review quality is measured by an eval set of invented diffs
+
+`test/eval/cases.ts` holds nine synthetic changes with known answers, scored on
+four numbers per intensity (`test/eval/score.ts`). `npm test` scores them
+against fixed answers; `npm run eval` scores them against a real endpoint.
+
+Why four numbers rather than one:
+`SPEC.md` §7 makes several claims and three of them are about restraint. A
+single "accuracy" figure would let a prompt that finds every planted bug *and*
+comments on every clean diff look good, which is the exact failure mode the
+product exists to avoid. So: miss rate, false-positive rate, noise rate, and
+silence correctness — and the last two are the ones to read first.
+
+Where the line between them falls:
+Mechanically, not by judgement. On a case whose correct review is silence,
+every observation is a **false positive**. On a case with a planted bug, an
+observation matching none of the expectations is **noise** — meaning
+*unasked-for*, not *wrong*. A model can be right about something nobody needed
+to hear, and §7 is precisely about suppressing that.
+
+Matching:
+An observation counts for an expectation when it is in the right file, within
+two lines, and mentions at least one of the expectation's words. The tolerance
+stops the eval from measuring line-citing instead of reviewing; the word list
+stops an observation being credited for landing on the right line while talking
+about something else.
+
+Two rules that keep the set honest:
+- **Every case is invented.** `LOOP.md` §2.2 forbids code that was under review
+  from entering this public repository, and an eval set is the likeliest place
+  for it to leak in. Any case added later must be written for the purpose.
+- **A test asserts every expectation lies inside its own diff.** Otherwise
+  `anchor.ts` would discard it before it became an observation, and the eval
+  would be measuring anchoring while appearing to measure review quality.
+
+What the offline run is worth:
+It pins the pipeline and the scorer against hand-written answers, which is a
+real regression test and is *not* a quality measurement. The numbers that mean
+something come from `npm run eval`, which needs a key.

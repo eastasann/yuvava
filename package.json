@@ -148,6 +148,7 @@
     "lint": "eslint src test --max-warnings 0",
     "test": "npm run compile && node --test \"out/test/**/*.test.js\"",
     "verify": "npm run lint && npm run compile && node --test \"out/test/**/*.test.js\"",
+    "eval": "npm run compile && node scripts/eval.mjs",
     "package": "npm run compile && vsce package -o yuvava.vsix",
     "install:local": "npm run verify && npm run package && code --install-extension yuvava.vsix --force && echo Installed. Run Developer: Reload Window in VS Code to activate it."
   },
