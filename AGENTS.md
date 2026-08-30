@@ -5,9 +5,23 @@ Code, or otherwise. Read this first, then `SPEC.md`.
 
 ## What this is
 
-Navigator is a VS Code extension that reviews the developer's current changes
-and points out problems. It is not an AI coding assistant. It does not write
-code, and it must never be able to.
+Navigator is a VS Code extension for developers who still want to write their
+own code. It is not an AI coding assistant. It does not write code, and it must
+never be able to.
+
+Three things it does, and they are peers (`SPEC.md` §4.1):
+
+| | |
+| --- | --- |
+| review | reads the current diff and points at problems (§6) |
+| guidance | names what a task involves, so the developer goes and finds out (§10) |
+| recall | gives back a forgotten name, and stops (§9) |
+
+**What is at the centre is not any of the three.** It is the constraint: §16
+(Navigator cannot write code) and §7 (silence is the default and usually the
+correct answer). Those are what make it a navigator rather than an assistant,
+and the three commands are three deliveries of the same discipline. Weigh a
+change against §22 and §23, not against how much it improves review.
 
 ## Source of truth, in order
 
@@ -116,7 +130,7 @@ human operating path, and none is part of the gate:
 | --- | --- | --- |
 | `npm run install:local` | a real VS Code and the `code` CLI | verifies, builds and installs the `.vsix` |
 | `npm run smoke` | an API key | one real request down each of review, guidance, recall and the MDN index |
-| `npm run eval` | an API key | review quality on the synthetic set, four numbers per intensity |
+| `npm run eval` | an API key | answer quality on the synthetic set — four numbers for review at each intensity, and for guidance and recall |
 | `npm run test:host` | a real VS Code (a display, or `xvfb-run`) | activation, `main` resolution, the palette, diagnostics, the hover provider |
 
 `npm run smoke` and `npm run test:host` exist because a green gate here does
@@ -167,7 +181,7 @@ src/vscode/   thin adapter, one file per command
   observationStore.ts  the last review, in memory, for the hover
   diagnostics.ts / statusBar.ts / config.ts / apiKey.ts
 test/         unit tests; `invariant.test.ts` guards the rule above
-  eval/                the review-quality set and its scorer (SPEC §7)
+  eval/                the quality sets and one scorer for all three paths (§7)
 scripts/      not part of the gate; each needs something a container lacks
   smoke.mjs            one real request down every network path (needs a key)
   eval.mjs             review quality against a real endpoint (needs a key)

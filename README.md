@@ -4,8 +4,10 @@
 
 Navigator is a VS Code extension for developers who still want to write their
 own code. It reviews the changes you have made and points at the problems it
-finds — and then it stops. It does not write code, complete functions, offer
-quick fixes, or modify a single byte of your workspace.
+finds; it names what a task involves so you can go and read about it; it gives
+back an API name you have forgotten. Then it stops. It does not write code,
+complete functions, offer quick fixes, or modify a single byte of your
+workspace.
 
     Human = Driver
     AI    = Navigator

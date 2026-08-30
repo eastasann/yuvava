@@ -13,23 +13,26 @@ The four surfaces §12 asks for — Diagnostics, Problems panel, Hover, Status B
 The working tree is clean and `npm run verify` is green.
 
 **A request has now succeeded.** `Where Should I Look?` returned topics from
-Groq and rendered them, so the whole guidance path — request, schema, response,
-validation, sanitising, display — works end to end against a real server. What
-has still never happened is a successful *review*: no observation has ever
-reached a diagnostic.
-Anything below that sounds like a capability is a capability whose *tests*
-pass. Treat "it works" as unproven until `npm run smoke` comes back clean, and
-"it is useful" as unproven until `npm run eval` produces numbers.
+Groq and rendered them, so one path — request, schema, response, validation,
+sanitising, display — works end to end against a real server.
 
-Every one of those first contacts found a real defect, which is what first
-contact is for: a reservation refused for room it would never use, a log that
-said what failed but not where, a model name recommended in the docs that does
-not exist, and — the moment something finally worked — an answer whose main
-content could not be clicked. All four are fixed. See `DECISIONS.md`.
+Three things remain unproven, and they are peers. Review has never produced an
+observation; guidance and recall have never been measured for quality; nothing
+has run inside a real VS Code. **Do not treat review as the one that matters**
+— `SPEC.md` §4.1 lists it beside the other two, and §7 makes silence the usual
+correct answer, so a capability that is normally silent cannot be the yardstick.
+The centre is the constraint, not any one command; `DECISIONS.md` says why, and
+the last time that was got wrong it left the eval blind to two thirds of the
+product.
 
-The pattern is worth naming for the next loop: **none of them was findable from
-inside this repository.** Every test here asserts what Navigator *sends* or
-what it *computes*, and all four defects lived in what happened next.
+Every first contact so far found a real defect, which is what first contact is
+for: a reservation refused for room it would never use, a log that said what
+failed but not where, a model name recommended in the docs that does not exist,
+and an answer whose main content could not be clicked. All are fixed.
+
+The pattern is worth naming: **none of them was findable from inside this
+repository.** Every test here asserts what Navigator *sends* or what it
+*computes*, and all four lived in what happened next.
 
 Read the open issues before this file (`LOOP.md` §2.2): they are the backlog of
 record. Six are open — two blocked on this environment, four waiting on
@@ -56,7 +59,7 @@ Last executed on this tree, Node v22.22.2 / npm 10.9.7, git 2.43.0:
 | --- | --- |
 | `npm run lint` | exit 0, no warnings |
 | `npm run compile` | exit 0 |
-| `node --test "out/test/**/*.test.js"` | exit 0 — **390 pass, 0 fail, 0 skipped**, 85 suites, ~1.2 s |
+| `node --test "out/test/**/*.test.js"` | exit 0 — **401 pass, 0 fail, 0 skipped**, 86 suites, ~1.2 s |
 | `npm run package` | exit 0 — `yuvava.vsix`, 5,527 files, 6.94 MB |
 
 Not runnable in a cloud container, and not part of the gate:
@@ -64,7 +67,7 @@ Not runnable in a cloud container, and not part of the gate:
 | Command | Needs | Last run |
 | --- | --- | --- |
 | `npm run smoke` | an API key | **never** — but the same paths have been exercised from the extension; see Known problems |
-| `npm run eval` | an API key | **never** — see Known problems |
+| `npm run eval` | an API key | **never** — covers all three paths; see Known problems |
 | `npm run test:host` | a real VS Code (display or `xvfb-run`) | **never** — VS Code cannot even be downloaded here |
 | `npm run install:local` | a real VS Code and the `code` CLI | the owner's machine |
 
@@ -112,7 +115,9 @@ Re-run the gate before trusting the table above if any source file has changed.
   answer (`test/tokenBudget.test.ts`), and every failure log names the route.
 - Two single retries on the compatible path: a rejected JSON schema, and a
   refused request size (`test/sizeRetry.test.ts`).
-- 390 tests, including `test/invariant.test.ts` (the §16 guard),
+- One eval scorer over all three paths, into the same four numbers
+  (`test/eval/`), so review and the question paths can be read side by side.
+- 401 tests, including `test/invariant.test.ts` (the §16 guard),
   `test/gitIntegration.test.ts` (real git, and it fails without it), and
   `test/eval.test.ts` (the eval set and scorer).
 
@@ -122,13 +127,14 @@ Re-run the gate before trusting the table above if any source file has changed.
 are open. Two are blocked on this environment rather than on a decision, and
 they are the ones to act on:
 
-- **#16 — no real API call has ever succeeded.** Missing: an API key
-  (`ANTHROPIC_API_KEY` or `OPENAI_API_KEY`; a free Groq or Cerebras key, or a
-  local Ollama, is enough for the compatible path). Everything else is done:
-  `npm run smoke` sends one real request down each of review, guidance, recall
-  and the MDN index, and on failure prints the raw error plus the two things
-  most likely to be wrong. **This is the single highest-value action available
-  to anyone reading this.**
+- **#16 — guidance has succeeded once; review and recall have not.** Missing:
+  an API key in an environment where the whole thing can be run at once
+  (`ANTHROPIC_API_KEY` or `OPENAI_API_KEY`; a free Groq key is enough for the
+  compatible path). Everything else is done: `npm run smoke` sends one real
+  request down each of review, guidance, recall and the MDN index, and on
+  failure prints the raw error plus the two things most likely to be wrong.
+  **This is the single highest-value action available to anyone reading this**,
+  and `npm run eval` immediately after it is the second.
 - **#18 — no test inside a real extension host.** Missing: a real VS Code, i.e.
   a display or `xvfb-run`. `npm run test:host` is written and loads; this
   container cannot download VS Code at all.
@@ -139,10 +145,10 @@ the two above would produce:
 
 - **Automatic review (#10) and passive behaviour (#11)** are held by `SPEC.md`
   §13, which permits automatic review only once the manual flow has proven
-  useful in real use. It has not been used at all. This is a SPEC constraint,
-  not a preference and not an oversight: implementing them now would violate
-  the spec, whatever their merits. They unblock when #16 and real use say the
-  manual flow earns its keep.
+  useful in real use. One guidance answer has been seen; no review has. This is
+  a SPEC constraint, not a preference and not an oversight: implementing them
+  now would violate the spec, whatever their merits. They unblock when a manual
+  review has run and been judged worth its interruption.
 - **Context-aware review (#14)** waits on `npm run eval` producing a
   false-positive rate to improve against — which waits on a key. The approach
   and its sequencing are settled in `DECISIONS.md`.
@@ -162,11 +168,11 @@ the two above would produce:
   answer that became an observation, and the schema-fallback path
   (`isStructuredOutputRejection`, which matches on error wording written against
   an expectation) has still never fired. Run `npm run smoke`.
-- **Review quality is unmeasured.** `test/eval/` now makes it measurable —
-  nine invented diffs, four numbers per intensity — but `npm run eval` has
-  never been run against a model. The offline eval scores hand-written answers
-  and proves the pipeline and the scorer, *not* the prompt. Do not read a green
-  `npm test` as evidence about `SPEC.md` §7.
+- **Answer quality is unmeasured, on all three paths.** `test/eval/` now makes
+  it measurable — nine invented diffs, nine invented questions, four numbers
+  each — but `npm run eval` has never been run against a model. The offline eval
+  scores hand-written answers and proves the pipeline and the scorer, *not* the
+  prompts. Do not read a green `npm test` as evidence about `SPEC.md` §7.
 - **The MDN documentation index has never resolved a term.** This container's
   egress allowlist blocks `developer.mozilla.org`, so `MdnDocsIndex` returns
   undefined here. Its failure path is genuinely confirmed — a real HTTP 403
