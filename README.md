@@ -33,8 +33,8 @@ for why it is built the way it is.
 
 ## Setup
 
-1. Install the extension (`npm run package` produces `navigator.vsix`;
-   install it with `code --install-extension navigator.vsix`).
+1. Install the extension (`npm run package` produces `yuvava.vsix`;
+   install it with `code --install-extension yuvava.vsix`).
 2. Pick a provider with `navigator.provider` (`anthropic`, the default, or
    `openai`), then run `Navigator: Set API Key` — the key is kept in VS Code
    secret storage, one per provider. `ANTHROPIC_API_KEY` / `OPENAI_API_KEY`
@@ -77,7 +77,7 @@ stripped whichever provider returns it.
 ```bash
 npm install
 npm run verify   # lint + typecheck/compile + tests
-npm run package  # build navigator.vsix
+npm run package  # build yuvava.vsix
 ```
 
 Agents working on this repository should read [AGENTS.md](AGENTS.md) first.

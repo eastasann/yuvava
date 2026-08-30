@@ -1,5 +1,5 @@
 {
-  "name": "navigator",
+  "name": "yuvava",
   "displayName": "Navigator",
   "description": "An AI pair-programming navigator that observes your changes and points out problems \u2014 without writing your code.",
   "version": "0.1.0",
@@ -107,7 +107,7 @@
     "lint": "eslint src test --max-warnings 0",
     "test": "npm run compile && node --test \"out/test/**/*.test.js\"",
     "verify": "npm run lint && npm run compile && node --test \"out/test/**/*.test.js\"",
-    "package": "npm run compile && vsce package -o navigator.vsix"
+    "package": "npm run compile && vsce package -o yuvava.vsix"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
@@ -126,6 +126,6 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/eastasann/dfnavigator.git"
+    "url": "https://github.com/eastasann/yuvava.git"
   }
 }
