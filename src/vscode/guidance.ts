@@ -19,6 +19,7 @@ import { searchUrl } from '../core/search.js';
 import type { GuidanceReport } from '../core/guidance.js';
 import { currentWorkspaceFolder, readConfig } from './config.js';
 import { promptForMissingApiKey, resolveApiKey } from './apiKey.js';
+import { readSelection } from './selection.js';
 import type { NavigatorStatusBar } from './statusBar.js';
 
 const TRANSIENT_MESSAGE_MS = 4000;
@@ -59,11 +60,20 @@ export function buildGuidancePicks(
   report: GuidanceReport,
   revealed = 0,
   links: ReadonlyMap<string, DocsLink> = new Map(),
+  contextSummary?: string,
 ): GuidancePick[] {
-  const picks: GuidancePick[] = report.topics.map((topic) => ({
+  const picks: GuidancePick[] = [];
+
+  // What was sent, said again where the answer is read. A separator cannot be
+  // selected, so it reads as a note rather than as an option.
+  if (contextSummary !== undefined) {
+    picks.push({ label: `Context: ${contextSummary}`, kind: vscode.QuickPickItemKind.Separator });
+  }
+
+  picks.push(...report.topics.map((topic) => ({
     label: topic.name,
     ...(topic.note === undefined ? {} : { description: topic.note }),
-  }));
+  })));
 
   const shown = report.hints.slice(0, Math.max(0, revealed));
   if (shown.length > 0) {
@@ -117,9 +127,16 @@ export async function whereShouldILook(
     return;
   }
 
+  // Read before asking, so the prompt can say what is going with the question.
+  // Nothing is sent that the developer was not told about first.
+  const selection = readSelection();
+
   const question = await vscode.window.showInputBox({
     title: 'Navigator: Where Should I Look?',
-    prompt: 'What are you trying to do?',
+    prompt:
+      selection === undefined
+        ? 'What are you trying to do?'
+        : `What are you trying to do? Sending ${selection.summary} with it.`,
     placeHolder: 'add a retry to fetch',
   });
   if (question === undefined || question.trim().length === 0) {
@@ -140,8 +157,12 @@ export async function whereShouldILook(
 
   let report: GuidanceReport;
   try {
+    if (selection !== undefined) {
+      log.info(`sending selection as context: ${selection.summary}`);
+    }
     report = await runGuidance({
       question,
+      ...(selection === undefined ? {} : { context: selection.context }),
       provider: createReviewProvider({
         kind: config.provider,
         apiKey,
@@ -175,7 +196,8 @@ export async function whereShouldILook(
 
   let revealed = 0;
   for (;;) {
-    const chosen = await vscode.window.showQuickPick(buildGuidancePicks(report, revealed, links), {
+    const picks = buildGuidancePicks(report, revealed, links, selection?.summary);
+    const chosen = await vscode.window.showQuickPick(picks, {
       title: question.trim(),
       placeHolder: 'Where to look. Escape closes this and leaves nothing behind.',
     });

@@ -15,6 +15,7 @@ import type * as ExtensionModule from '../src/vscode/extension.js';
 import type * as DiagnosticsModule from '../src/vscode/diagnostics.js';
 import type * as GuidanceModule from '../src/vscode/guidance.js';
 import type * as RecallModule from '../src/vscode/recall.js';
+import type * as SelectionModule from '../src/vscode/selection.js';
 
 const FAKE_PATH = require.resolve('./fakes/vscode.js');
 
@@ -44,6 +45,7 @@ const extension = require('../src/vscode/extension.js') as typeof ExtensionModul
 const diagnosticsModule = require('../src/vscode/diagnostics.js') as typeof DiagnosticsModule;
 const guidanceModule = require('../src/vscode/guidance.js') as typeof GuidanceModule;
 const recallModule = require('../src/vscode/recall.js') as typeof RecallModule;
+const selectionModule = require('../src/vscode/selection.js') as typeof SelectionModule;
 /* eslint-enable @typescript-eslint/no-require-imports */
 
 const REQUIRED_COMMANDS = [
@@ -551,5 +553,62 @@ describe('documentation exploration (SPEC §21.6)', () => {
     assert.equal(guidanceModule.disclosureSteps(noHints), 1);
     const labels = guidanceModule.buildGuidancePicks(noHints, 1).map((pick) => pick.label);
     assert.ok(labels.includes('You may want to explore'));
+  });
+});
+
+describe('the editor selection as context (issue #24)', () => {
+  beforeEach(() => {
+    fake.reset();
+    for (const name of API_KEY_VARS) {
+      delete process.env[name];
+    }
+    fake.window.activeTextEditor = undefined;
+    extension.activate(fake.makeExtensionContext() as never);
+  });
+
+  after(() => {
+    fake.window.activeTextEditor = undefined;
+  });
+
+  it('tells the developer what is going with the question, before they type it', async () => {
+    fake.recorded.workspaceFolders = [{ uri: { fsPath: '/repo' }, name: 'w', index: 0 }];
+    fake.window.activeTextEditor = fake.fakeEditor(
+      '/repo/src/a.ts',
+      'async function load(url) {\n  return await fetch(url);\n}',
+      12,
+    );
+    fake.recorded.inputBoxAnswers.push(undefined);
+    await fake.commands.executeCommand('navigator.whereToLook');
+    // Dismissed at the input box: nothing was sent, and nothing was asked for.
+    assert.deepEqual(fake.recorded.quickPicks, []);
+  });
+
+  it('sends nothing when nothing is selected', () => {
+    fake.window.activeTextEditor = fake.fakeEditor('/repo/src/a.ts', '');
+    assert.equal(selectionModule.readSelection(), undefined);
+  });
+
+  it('has no editor to read when none is open', () => {
+    fake.window.activeTextEditor = undefined;
+    assert.equal(selectionModule.readSelection(), undefined);
+  });
+
+  it('reads the selection relative to the workspace', () => {
+    fake.recorded.workspaceFolders = [{ uri: { fsPath: '/repo' }, name: 'w', index: 0 }];
+    fake.window.activeTextEditor = fake.fakeEditor('/repo/src/a.ts', 'const a = 1;\nconst b = 2;', 12);
+    const read = selectionModule.readSelection();
+    assert.equal(read?.summary, 'src/a.ts:12-13 (2 lines)');
+    assert.match(read.context, /const a = 1;/);
+  });
+
+  it('shows what was sent alongside the answer, and it cannot be picked', () => {
+    const picks = guidanceModule.buildGuidancePicks(
+      { status: 'answered', topics: [{ name: 'backoff' }], searches: [], hints: [], explore: [], notes: [] },
+      0,
+      new Map(),
+      'src/a.ts:12-14 (3 lines)',
+    );
+    assert.equal(picks[0].label, 'Context: src/a.ts:12-14 (3 lines)');
+    assert.equal(picks[0].kind, fake.QuickPickItemKind.Separator);
   });
 });

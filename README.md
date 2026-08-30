@@ -18,7 +18,8 @@ for why it is built the way it is.
 - `Navigator: Review Current Changes` reviews your working-tree diff, including
   new files git is not tracking yet (`.gitignore` is honoured, and nothing is
   ever staged to make them visible).
-- `Navigator: Where Should I Look?` takes what you are trying to do and names
+- `Navigator: Where Should I Look?` takes what you are trying to do — plus
+  whatever you have selected, if anything — and names
   what it involves — the APIs, the concepts, the decisions — plus the words to
   search for. It does not answer the question. If that is not enough, **More
   specific** opens one more level of hint at a time, and never on its own.

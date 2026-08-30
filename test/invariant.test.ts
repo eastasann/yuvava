@@ -129,6 +129,15 @@ describe('Navigator cannot modify user source code', () => {
     assert.deepEqual(commandLinks, ['${GO_DEEPER_COMMAND}']);
   });
 
+  it('reads the editor selection and never writes through it', () => {
+    const selection = SOURCES.find((file) => file.path === 'src/vscode/selection.ts');
+    assert.ok(selection, 'the selection reader is missing');
+    // `TextEditor` offers `edit` alongside `selection`. This pins that the one
+    // file allowed near an editor calls only the reading member.
+    const members = [...selection.text.matchAll(/\.(\w+)\s*\(/g)].map((match) => match[1]);
+    assert.deepEqual([...new Set(members)].sort(), ['asRelativePath', 'getText']);
+  });
+
   it('publishes findings only as diagnostics', () => {
     const extension = SOURCES.find((file) => file.path === 'src/vscode/extension.ts');
     assert.ok(extension, 'extension entry point is missing');

@@ -601,3 +601,35 @@ Consequences:
 - Something already named as a topic is dropped from it; repeating the answer
   back is not a discovery.
 - It never appears in the review path, where an interruption costs most.
+
+## Decision: A selection is sent as context; no selection sends nothing
+
+`Navigator: Where Should I Look?` includes the editor selection when there is
+one. When there is not, it sends the question alone — it does not fall back to
+the lines around the cursor.
+
+Reason:
+"Add a retry to this" is a far better question when *this* was pointed at, and
+selecting is work the developer has usually already done. But a cursor-line
+guess would attach context to *every* question, silently and with no shape the
+developer can see. A selection is a deliberate act; a cursor position is where
+they happened to stop typing.
+
+What is told, and when:
+- The input box says what is going with the question **before** it is typed:
+  "Sending src/a.ts:12-40 (29 lines) with it." Nothing leaves the editor that
+  the developer was not shown first.
+- The QuickPick repeats it as a non-selectable separator, where the answer is
+  read.
+- The log records it.
+
+Caps:
+200 lines or 4000 characters, whichever comes first, and the summary says
+"first N lines" when it cut. A whitespace-only selection sends nothing, so a
+stray click cannot attach a character to the question.
+
+Invariant:
+`src/vscode/selection.ts` is the only file that touches a `TextEditor`, and
+`TextEditor` offers `edit` right next to `selection`. `test/invariant.test.ts`
+pins the exact set of members that file calls — `getText` and
+`asRelativePath` — so an edit path there cannot appear quietly.

@@ -166,7 +166,19 @@ export const commands = {
 
 export const window = {
   activeTextEditor: undefined as
-    | { document: { uri: Uri }; selection: { active: { line: number } } }
+    | {
+        document: {
+          uri: Uri;
+          languageId: string;
+          getText(range?: unknown): string;
+        };
+        selection: {
+          active: { line: number };
+          isEmpty: boolean;
+          start: { line: number };
+          end: { line: number };
+        };
+      }
     | undefined,
   createOutputChannel(_name: string, _options?: unknown) {
     const log = (level: string, message: string): void => {
@@ -232,6 +244,11 @@ export const workspace = {
   getWorkspaceFolder(_uri: Uri) {
     return recorded.workspaceFolders?.[0];
   },
+  asRelativePath(uri: Uri | string, _includeFolder?: boolean): string {
+    const full = typeof uri === 'string' ? uri : uri.fsPath;
+    const root = recorded.workspaceFolders?.[0]?.uri.fsPath;
+    return root !== undefined && full.startsWith(`${root}/`) ? full.slice(root.length + 1) : full;
+  },
   getConfiguration(_section: string, _scope?: unknown) {
     return {
       get<T>(key: string, defaultValue?: T): T | undefined {
@@ -251,6 +268,29 @@ export const workspace = {
     });
   },
 };
+
+/** An editor with `text` selected over the given 1-based line range. */
+export function fakeEditor(
+  fsPath: string,
+  text: string,
+  startLine = 1,
+  languageId = 'typescript',
+): NonNullable<typeof window.activeTextEditor> {
+  const endLine = startLine + Math.max(0, text.split('\n').length - 1);
+  return {
+    document: {
+      uri: Uri.file(fsPath),
+      languageId,
+      getText: () => text,
+    },
+    selection: {
+      active: { line: startLine - 1 },
+      isEmpty: text.length === 0,
+      start: { line: startLine - 1 },
+      end: { line: endLine - 1 },
+    },
+  };
+}
 
 export function makeExtensionContext(): {
   subscriptions: Array<{ dispose(): void }>;
