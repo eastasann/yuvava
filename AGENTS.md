@@ -113,6 +113,13 @@ npm run package   # builds yuvava.vsix
 real VS Code via the `code` CLI. That is the human operating path; it is not
 runnable here and is not part of the gate.
 
+**`git` must be on `PATH` to verify.** `test/gitIntegration.test.ts` is the only
+coverage of the real `execFile` path and of git's actual diff output, and it
+*fails* rather than skips when git is missing — a green run has to mean the
+whole product was exercised, and a skipped suite in a summary line nobody reads
+does not achieve that. Git is not an optional dependency of a tool that reviews
+git diffs.
+
 `npm run verify` is the gate. Do not report work as done without it passing,
 and put the results you actually observed into `PROGRESS.md` before you stop
 (`LOOP.md` §25.2) — never copy the previous run's numbers.
