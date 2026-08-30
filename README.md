@@ -18,14 +18,30 @@ for why it is built the way it is.
 - `Navigator: Review Current Changes` reviews your working-tree diff, including
   new files git is not tracking yet (`.gitignore` is honoured, and nothing is
   ever staged to make them visible).
+- `Navigator: Where Should I Look?` takes what you are trying to do — plus
+  whatever you have selected, if anything — and names
+  what it involves — the APIs, the concepts, the decisions — plus the words to
+  search for. It does not answer the question. If that is not enough, **More
+  specific** opens one more level of hint at a time, and never on its own.
+  Search terms that MDN recognises become links; the rest stay terms you can
+  search yourself. Navigator never shows a link a model wrote. Past the last
+  hint there is one more step — a few adjacent things worth stumbling over,
+  which you only see if you get that far.
+- `Navigator: What Was It Called?` gives back a name you have forgotten but
+  would recognise. The name comes on its own; the signature, the one-line
+  meaning and the documentation are each one more step you have to take.
 - Real problems show up as **diagnostics** in the editor and the Problems panel:
   correctness bugs, missed edge cases, unhandled null/undefined, error handling
   gaps, and — at higher intensity — concurrency, security and performance risks.
+- Hovering an observation offers **Go deeper** — one hint at a time about that
+  observation, and never the answer.
 - When there is nothing worth saying, it says nothing.
 
 ## What it deliberately does not do
 
 - It does not generate implementation code, patches or replacement snippets.
+  A hint may show a signature, or the shape of a construct with the decision
+  left out — never anything that would run as written.
 - It does not offer Quick Fixes, autocomplete, or "apply this change".
 - It does not write to your files. The extension has no code path that can:
   `test/invariant.test.ts` fails the build if one is ever introduced.
@@ -93,10 +109,13 @@ from the VS Code command palette.
 | Command | What it does |
 | --- | --- |
 | `Navigator: Review Current Changes` | Reviews the working tree against `navigator.diffBase`. |
+| `Navigator: Where Should I Look?` | Names what a task involves, and what to search for. Answers nothing. |
+| `Navigator: What Was It Called?` | Gives back a forgotten name. Signature, meaning and docs only if you ask. |
+| `Navigator: Go Deeper` | Opens one more level of hint about the observation under the cursor. |
 | `Navigator: Clear Observations` | Removes Navigator's diagnostics. |
 | `Navigator: Set API Key` | Stores the active provider's API key in secret storage. |
 | `Navigator: Clear API Key` | Removes the active provider's stored key. |
-| `Navigator: Show Log` | Opens the Navigator output channel. |
+| `Navigator: Show Log` | Opens the Navigator output channel — including what each request cost in tokens. |
 
 ## Settings
 
@@ -106,6 +125,7 @@ from the VS Code command palette.
 | `navigator.model` | *(provider default)* | `claude-opus-5` or `gpt-5.1-codex-max` unless set. |
 | `navigator.openaiBaseUrl` | *(empty)* | An OpenAI-compatible endpoint to use instead of OpenAI. |
 | `navigator.reviewIntensity` | `normal` | `silent`, `normal` or `strict` (SPEC §15). |
+| `navigator.effort` | *(empty)* | How hard the model thinks before answering. Empty means the model's own default. |
 | `navigator.diffBase` | `HEAD` | Revision the working tree is compared against. |
 | `navigator.includeUntracked` | `true` | Also review new, untracked files. |
 | `navigator.maxDiffBytes` | `200000` | Diffs above this size are not sent. |
@@ -155,12 +175,29 @@ npm run package        # build yuvava.vsix
 npm run install:local  # verify, build, and install into VS Code
 ```
 
+The gate needs `git` on `PATH`: the one suite that drives real git fails rather
+than skips without it. Three more commands are deliberately outside the gate,
+because each needs something a container does not have:
+
+```bash
+npm run smoke      # one real request down every path      (needs an API key)
+npm run eval       # review quality on the synthetic set    (needs an API key)
+npm run test:host  # checks inside a real VS Code   (needs a display, or xvfb-run)
+```
+
+`npm run eval` prints four numbers per intensity — miss rate, false-positive
+rate, noise rate, silence correctness — so two prompts can be compared. The
+last two matter most: SPEC §7 is a claim about restraint, and a review that
+finds every bug and also comments on every clean diff has failed it.
+
 Agents working on this repository should read [AGENTS.md](AGENTS.md) first.
 
 The code is split so the interesting parts are testable outside the editor:
 
 - `src/core/` — git, diff parsing, prompt, providers, response validation,
   sanitising, anchoring. No `vscode` import; a test-enforced boundary.
-- `src/vscode/` — commands, diagnostics, status bar. Thin by design.
+- `src/vscode/` — commands, diagnostics, status bar, hover. Thin by design.
 - `test/` — unit tests, including `invariant.test.ts`, which reads Navigator's
-  own source to prove it cannot edit yours.
+  own source to prove it cannot edit yours, and `test/eval/`, the synthetic
+  set used to measure review quality.
+- `scripts/` — the three commands above. None runs in CI or a container.

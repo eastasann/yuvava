@@ -10,6 +10,7 @@ import { parseUnifiedDiff, renderAnnotatedDiff, reviewableFiles, type DiffFile }
 import { parseReviewResponse } from './schema.js';
 import { anchorIssues } from './anchor.js';
 import { ReviewUnavailableError, type ReviewProvider } from './provider.js';
+import { describeUsage } from './usage.js';
 import type { DroppedObservation, Observation, ReviewIntensity } from './types.js';
 
 export interface ReviewOptions {
@@ -36,6 +37,12 @@ export interface ReviewReport {
   /** Notes for the log: parse problems, discarded issues, size warnings. */
   readonly notes: readonly string[];
   readonly files: readonly DiffFile[];
+  /**
+   * The provider's raw answer, before parsing. Absent when no request was
+   * made. Exists so `npm run eval` can record a real answer and replay it
+   * later (`test/eval/recorded.ts`); the extension never displays it.
+   */
+  readonly rawText?: string;
 }
 
 const EMPTY_REPORT = (status: ReviewStatus, notes: string[] = [], files: DiffFile[] = []): ReviewReport => ({
@@ -97,6 +104,8 @@ export async function runReview(options: ReviewOptions): Promise<ReviewReport> {
   for (const drop of outcome.dropped) {
     notes.push(`discarded ${drop.detail}: ${drop.reason}`);
   }
+  // Last, so it reads as a footer and never displaces a warning.
+  notes.push(describeUsage(response.usage));
 
   return {
     status: 'reviewed',
@@ -104,5 +113,6 @@ export async function runReview(options: ReviewOptions): Promise<ReviewReport> {
     dropped: outcome.dropped,
     notes,
     files,
+    rawText: response.text,
   };
 }

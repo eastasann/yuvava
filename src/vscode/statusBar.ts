@@ -18,6 +18,13 @@ export class NavigatorStatusBar {
     this.item.show();
   }
 
+  /** SPEC §10: the guidance command's only state display. */
+  setLooking(): void {
+    this.item.text = '$(search) Navigator: looking';
+    this.item.tooltip = 'Navigator is working out where to look';
+    this.item.show();
+  }
+
   setObservations(count: number): void {
     if (count <= 0) {
       this.setIdle();

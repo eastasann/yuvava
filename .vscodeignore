@@ -8,6 +8,7 @@ out/test/**
 out/**/*.js.map
 src/**
 test/**
+scripts/**
 node_modules/.bin/**
 eslint.config.mjs
 tsconfig.json

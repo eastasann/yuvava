@@ -109,9 +109,28 @@ npm test          # node:test
 npm run package   # builds yuvava.vsix
 ```
 
-`npm run install:local` also exists — it verifies, builds and installs into a
-real VS Code via the `code` CLI. That is the human operating path; it is not
-runnable here and is not part of the gate.
+Three more exist, and **none of them runs in a cloud container**. They are the
+human operating path, and none is part of the gate:
+
+| Command | Needs | What it settles |
+| --- | --- | --- |
+| `npm run install:local` | a real VS Code and the `code` CLI | verifies, builds and installs the `.vsix` |
+| `npm run smoke` | an API key | one real request down each of review, guidance, recall and the MDN index |
+| `npm run eval` | an API key | review quality on the synthetic set, four numbers per intensity |
+| `npm run test:host` | a real VS Code (a display, or `xvfb-run`) | activation, `main` resolution, the palette, diagnostics, the hover provider |
+
+`npm run smoke` and `npm run test:host` exist because a green gate here does
+not mean Navigator works: every provider test injects the SDK's `fetch`, and
+the extension tests activate against a fake `vscode` module. If you have a key
+or a display, run them — that is the part this environment cannot do, and the
+part the repository most needs.
+
+**`git` must be on `PATH` to verify.** `test/gitIntegration.test.ts` is the only
+coverage of the real `execFile` path and of git's actual diff output, and it
+*fails* rather than skips when git is missing — a green run has to mean the
+whole product was exercised, and a skipped suite in a summary line nobody reads
+does not achieve that. Git is not an optional dependency of a tool that reviews
+git diffs.
 
 `npm run verify` is the gate. Do not report work as done without it passing,
 and put the results you actually observed into `PROGRESS.md` before you stop
@@ -125,20 +144,43 @@ src/core/     no `vscode` import, ever — this boundary is enforced by a test
   untracked.ts         new files rendered as an all-added diff (no `git add -N`)
   workspaceDiff.ts     tracked + untracked, composed
   diff.ts              unified-diff parsing and line-numbered rendering
-  prompt.ts            the Navigator persona (SPEC §17)
-  schema.ts            response schema + validation of whatever comes back
-  sanitize.ts          the structural no-code-generation guard
+  prompt.ts            the Navigator persona for review (SPEC §17)
+  schema.ts            review schema + validation of whatever comes back
+  sanitize.ts          the structural no-code-generation guard (review path)
+  hintSanitize.ts      the hint path's looser rule — a hole, never a fix (§8)
   anchor.ts            issues -> observations, anchored to reviewed lines
   range.ts             where the underline goes
-  provider.ts          the ReviewProvider seam
+  provider.ts          the seam: one method per job, no generic "ask anything"
   anthropicProvider.ts / openaiProvider.ts / providerFactory.ts
-  review.ts            the pipeline
-src/vscode/   thin adapter: commands, diagnostics, status bar, config
+  usage.ts             what a request cost, across three wire shapes
+  review.ts            the review pipeline
+  guidancePrompt/Schema.ts, guidance.ts    "where should I look" (§10, §8, §21.6)
+  recallPrompt/Schema.ts, recall.ts        "what was it called" (§9)
+  observationHints.ts  one observation -> a question for the guidance path
+  docsIndex.ts         MDN search; the only source of a displayed URL
+  search.ts            a term -> a plain web search
+  selectionContext.ts  an editor selection, capped and described
+src/vscode/   thin adapter, one file per command
+  extension.ts         activation and the review command
+  guidance.ts / recall.ts / hover.ts       the three question commands
+  selection.ts         the only file that touches a TextEditor
+  observationStore.ts  the last review, in memory, for the hover
+  diagnostics.ts / statusBar.ts / config.ts / apiKey.ts
 test/         unit tests; `invariant.test.ts` guards the rule above
+  eval/                the review-quality set and its scorer (SPEC §7)
+scripts/      not part of the gate; each needs something a container lacks
+  smoke.mjs            one real request down every network path (needs a key)
+  eval.mjs             review quality against a real endpoint (needs a key)
+  test-host.mjs + host/index.cjs   checks inside a real VS Code (needs a display)
 ```
 
 New logic goes in `src/core/` with a test. `src/vscode/` should stay thin
 enough that its correctness is obvious by reading it.
+
+A new job for the model is a method on both providers plus a prompt and a
+schema — about thirty lines. That cost is deliberate: there is no generic
+"ask the model anything" call, so every prompt stays on Navigator's side of
+the seam. See `DECISIONS.md`.
 
 ## Conventions
 
@@ -155,8 +197,9 @@ enough that its correctness is obvious by reading it.
 ## Providers
 
 Anthropic (default, `claude-opus-5`) and OpenAI (`gpt-5.1-codex-max`), selected
-by `navigator.provider`. Both use the same prompt, the same JSON schema, and
-the same validation. If you add a third, it goes behind `ReviewProvider` and
+by `navigator.provider`. Both implement `review`, `guide` and `recall`, all
+using the prompts and schemas in `src/core/`, and every answer goes through the
+same validation. If you add a third, it goes behind those interfaces and
 `providerFactory.ts`, and it changes nothing about what Navigator does with the
 answer.
 

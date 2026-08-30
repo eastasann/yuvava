@@ -1,19 +1,35 @@
 /**
- * The only place Navigator talks to a model.
+ * The Anthropic client.
  *
- * The request is deliberately narrow: a system prompt, one diff, and a JSON
- * schema whose only prose field is `message`. There is no tool the model could
- * use to touch the workspace, and no response field that could carry a patch.
+ * The request is deliberately narrow: a system prompt Navigator wrote, one
+ * piece of context, and a JSON schema with no field that could carry a patch.
+ * There is no tool the model could use to touch the workspace, and the caller
+ * cannot supply its own prompt — it picks one of the jobs below.
  */
 
 import Anthropic from '@anthropic-ai/sdk';
 import { buildSystemPrompt, buildUserPrompt } from './prompt.js';
+import { buildGuidanceSystemPrompt, buildGuidanceUserPrompt } from './guidancePrompt.js';
+import { buildRecallSystemPrompt, buildRecallUserPrompt } from './recallPrompt.js';
 import { REVIEW_OUTPUT_SCHEMA } from './schema.js';
-import { ReviewUnavailableError, type ReviewProvider, type ReviewRequest, type ReviewResponse } from './provider.js';
+import { GUIDANCE_OUTPUT_SCHEMA } from './guidanceSchema.js';
+import { RECALL_OUTPUT_SCHEMA } from './recallSchema.js';
+import { readUsage } from './usage.js';
+import type { ReviewEffort } from './types.js';
+import {
+  ReviewUnavailableError,
+  type GuidanceProvider,
+  type GuidanceRequest,
+  type ProviderResponse,
+  type RecallProvider,
+  type RecallRequest,
+  type ReviewProvider,
+  type ReviewRequest,
+} from './provider.js';
 
 export const DEFAULT_ANTHROPIC_MODEL = 'claude-opus-5';
 
-/** Reviews are short; the schema keeps them shorter. */
+/** Answers are short; the schemas keep them shorter. */
 const MAX_TOKENS = 4096;
 
 const FALLBACK_BETA = 'server-side-fallback-2026-07-01';
@@ -21,13 +37,16 @@ const FALLBACK_BETA = 'server-side-fallback-2026-07-01';
 export interface AnthropicProviderOptions {
   readonly apiKey: string;
   readonly model?: string;
+  /** Absent or empty leaves the model's own default in place. */
+  readonly effort?: ReviewEffort;
   /** Custom fetch implementation. Used by tests to pin the request shape. */
   readonly fetch?: typeof globalThis.fetch;
 }
 
-export class AnthropicReviewProvider implements ReviewProvider {
+export class AnthropicReviewProvider implements ReviewProvider, GuidanceProvider, RecallProvider {
   private readonly client: Anthropic;
   private readonly model: string;
+  private readonly effort: ReviewEffort;
 
   constructor(options: AnthropicProviderOptions) {
     this.client = new Anthropic({
@@ -38,29 +57,71 @@ export class AnthropicReviewProvider implements ReviewProvider {
       ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
     });
     this.model = options.model?.trim() || DEFAULT_ANTHROPIC_MODEL;
+    this.effort = options.effort ?? '';
   }
 
-  async review(request: ReviewRequest): Promise<ReviewResponse> {
+  review(request: ReviewRequest): Promise<ProviderResponse> {
+    return this.ask(
+      buildSystemPrompt(request.intensity),
+      buildUserPrompt(request.annotatedDiff),
+      REVIEW_OUTPUT_SCHEMA,
+      'review this change',
+      request.signal,
+    );
+  }
+
+  guide(request: GuidanceRequest): Promise<ProviderResponse> {
+    return this.ask(
+      buildGuidanceSystemPrompt(),
+      buildGuidanceUserPrompt(request.question) + (request.context ?? ''),
+      GUIDANCE_OUTPUT_SCHEMA,
+      'answer',
+      request.signal,
+    );
+  }
+
+  recall(request: RecallRequest): Promise<ProviderResponse> {
+    return this.ask(
+      buildRecallSystemPrompt(),
+      buildRecallUserPrompt(request.description),
+      RECALL_OUTPUT_SCHEMA,
+      'answer',
+      request.signal,
+    );
+  }
+
+  private async ask(
+    system: string,
+    user: string,
+    schema: object,
+    job: string,
+    signal: AbortSignal | undefined,
+  ): Promise<ProviderResponse> {
     let message;
     try {
       message = await this.client.beta.messages.create(
         {
           model: this.model,
           max_tokens: MAX_TOKENS,
-          system: buildSystemPrompt(request.intensity),
-          messages: [{ role: 'user', content: buildUserPrompt(request.annotatedDiff) }],
-          output_config: { format: { type: 'json_schema', schema: REVIEW_OUTPUT_SCHEMA } },
+          system,
+          messages: [{ role: 'user', content: user }],
+          output_config: {
+            format: { type: 'json_schema', schema: schema as Record<string, unknown> },
+            // Omitted entirely when unset, so the model's own default applies
+            // rather than Navigator picking one on the developer's behalf.
+            ...(this.effort === '' ? {} : { effort: this.effort }),
+          },
           betas: [FALLBACK_BETA],
           fallbacks: 'default',
         },
-        { signal: request.signal },
+        { signal },
       );
     } catch (error) {
       throw new ReviewUnavailableError(describeApiError(error), { cause: error });
     }
 
     if (message.stop_reason === 'refusal') {
-      throw new ReviewUnavailableError('the model declined to review this change');
+      throw new ReviewUnavailableError(`the model declined to ${job}`);
     }
 
     const text = message.content
@@ -73,7 +134,8 @@ export class AnthropicReviewProvider implements ReviewProvider {
       throw new ReviewUnavailableError('the model returned an empty response');
     }
 
-    return { text };
+    const usage = readUsage(message.usage);
+    return usage === undefined ? { text } : { text, usage };
   }
 }
 

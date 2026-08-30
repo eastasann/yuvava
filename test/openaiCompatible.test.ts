@@ -213,3 +213,35 @@ describe('isStructuredOutputRejection', () => {
     assert.equal(isStructuredOutputRejection(undefined), false);
   });
 });
+
+describe('usage from an OpenAI-compatible endpoint', () => {
+  function withUsage(usage: unknown): unknown {
+    const base = chatResponse(REVIEW_JSON) as Record<string, unknown>;
+    if (usage === undefined) {
+      delete base.usage;
+      return base;
+    }
+    return { ...base, usage };
+  }
+
+  it('reads the Chat Completions shape when it is there', async () => {
+    const provider = providerWith([
+      () =>
+        json(
+          withUsage({
+            prompt_tokens: 900,
+            completion_tokens: 210,
+            completion_tokens_details: { reasoning_tokens: 64 },
+          }),
+        ),
+    ]);
+    const response = await provider.review(REQUEST);
+    assert.deepEqual(response.usage, { input: 900, output: 210, thinking: 64 });
+  });
+
+  it('does not fail when the endpoint reports no usage at all', async () => {
+    const provider = providerWith([() => json(withUsage(undefined))]);
+    const response = await provider.review(REQUEST);
+    assert.equal(response.usage, undefined);
+  });
+});
