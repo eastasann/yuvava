@@ -934,3 +934,40 @@ apart. Naming the route only on success is exactly backwards.
 Consequence:
 A git failure passes no route, because nothing was sent and naming an endpoint
 would imply otherwise.
+
+## Decision: An endpoint that refuses the size gets asked again, smaller — once
+
+`viaChatCompletions` now has two independent single retries: one for a rejected
+JSON schema (as before) and one for a refused request size. Each fires at most
+once, and only for its own kind of refusal.
+
+Reason:
+The same 413 as the entry above, from the other side. Per-job budgets fixed
+guidance and recall on an 8,000-token-per-minute tier, but a review keeps 8,192
+reserved and so could never fit — meaning the product's main feature did not
+work at all on the endpoint the owner actually had. "That is a tier limit, not
+a defect" is true and no comfort.
+
+Halving and asking again costs one round trip and makes the difference between
+an answer and nothing.
+
+Why not read the limit out of the error:
+Groq's message says `Limit 8000, Requested 9386`, so the exact figure is right
+there — and parsing it means depending on one vendor's prose. Halving depends
+on nothing.
+
+Guards:
+- The status alone is not enough. A 429 for "too many requests" is not helped by
+  a shorter answer, and retrying into it only adds load, so the message must
+  also be about size or tokens (`isTokenBudgetRejection`).
+- It stops at 512 tokens, below which an answer has no room to be one.
+- A truncation *after* a reduction is reported as such, rather than as an
+  ordinary `max_tokens` truncation: one means the diff needs a bigger budget,
+  the other means the endpoint would not grant one, and the developer can act
+  on the difference.
+
+Not done, deliberately:
+The Responses API path (OpenAI proper) has no such retry. Its limits are much
+higher and nobody has seen this there. Adding it now would be architecture for
+a failure that has not happened (`LOOP.md` §6.6). The same reasoning applies to
+the Anthropic path. If either is ever observed, this is the shape to copy.
