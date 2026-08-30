@@ -54,6 +54,9 @@ const REVIEW_OUTPUT_TOKENS = 8192;
 const GUIDANCE_OUTPUT_TOKENS = 2048;
 const RECALL_OUTPUT_TOKENS = 1024;
 
+/** Below this an answer has no room to be one, so halving stops here. */
+const MIN_OUTPUT_TOKENS = 512;
+
 /**
  * What OpenAI accepts, which is a shorter ladder than Anthropic's.
  *
@@ -217,10 +220,19 @@ export class OpenAIReviewProvider implements ReviewProvider, GuidanceProvider, R
   /**
    * Any OpenAI-compatible endpoint: Chat Completions.
    *
-   * Structured output support varies across these services, so a rejected
-   * schema falls back to a plain request once. The response is validated the
-   * same way either way — `parseReviewResponse` already tolerates JSON that
-   * arrives wrapped in prose or a fence.
+   * Two things these services do differently, each answered by one retry:
+   *
+   *   - **structured output.** Support varies, so a rejected schema falls back
+   *     to a plain request. The response is validated the same way either way —
+   *     `parseReviewResponse` already tolerates JSON wrapped in prose or a fence.
+   *   - **the size of the reservation.** Some endpoints bill `max_tokens`
+   *     against a rate limit rather than the tokens actually produced, so a
+   *     request can be refused for room it was never going to use. Halving the
+   *     reservation and asking again is better than not answering at all.
+   *
+   * Each fires at most once, and only for its own kind of refusal. A truncated
+   * answer afterwards is reported as truncated rather than passed off as
+   * complete.
    */
   private async viaChatCompletions(job: Job, signal: AbortSignal | undefined): Promise<ProviderResponse> {
     const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
@@ -229,20 +241,36 @@ export class OpenAIReviewProvider implements ReviewProvider, GuidanceProvider, R
     ];
     const warnings: string[] = [];
 
-    let completion;
-    try {
-      completion = await this.createCompletion(job, messages, signal, true);
-    } catch (error) {
-      if (!isStructuredOutputRejection(error)) {
-        throw new ReviewUnavailableError(describeOpenAIError(error), { cause: error });
-      }
-      warnings.push(
-        'the endpoint rejected the JSON schema; retried without it and validated the answer locally',
-      );
+    let withSchema = true;
+    let budget = job.maxOutputTokens;
+    let schemaRetried = false;
+    let budgetRetried = false;
+
+    let completion: OpenAI.Chat.ChatCompletion;
+    for (;;) {
       try {
-        completion = await this.createCompletion(job, messages, signal, false);
-      } catch (retryError) {
-        throw new ReviewUnavailableError(describeOpenAIError(retryError), { cause: retryError });
+        completion = await this.createCompletion(job, messages, signal, withSchema, budget);
+        break;
+      } catch (error) {
+        if (!schemaRetried && isStructuredOutputRejection(error)) {
+          schemaRetried = true;
+          withSchema = false;
+          warnings.push(
+            'the endpoint rejected the JSON schema; retried without it and validated the answer locally',
+          );
+          continue;
+        }
+        if (!budgetRetried && budget > MIN_OUTPUT_TOKENS && isTokenBudgetRejection(error)) {
+          budgetRetried = true;
+          const reduced = Math.max(MIN_OUTPUT_TOKENS, Math.floor(budget / 2));
+          warnings.push(
+            `the endpoint refused the request size; retried with ${reduced} tokens set aside for ` +
+              `the answer instead of ${budget}`,
+          );
+          budget = reduced;
+          continue;
+        }
+        throw new ReviewUnavailableError(describeOpenAIError(error), { cause: error });
       }
     }
 
@@ -251,7 +279,13 @@ export class OpenAIReviewProvider implements ReviewProvider, GuidanceProvider, R
       throw new ReviewUnavailableError('the endpoint returned no choices');
     }
     if (choice.finish_reason === 'length') {
-      throw new ReviewUnavailableError('the review was cut short (max_tokens)');
+      // Saying which of the two happened matters: one is a diff that needs a
+      // bigger budget, the other is an endpoint that would not grant one.
+      throw new ReviewUnavailableError(
+        budgetRetried
+          ? `the answer was cut short after the endpoint refused the original size (${budget} tokens)`
+          : 'the review was cut short (max_tokens)',
+      );
     }
     if (typeof choice.message.refusal === 'string' && choice.message.refusal.length > 0) {
       throw new ReviewUnavailableError(
@@ -272,12 +306,13 @@ export class OpenAIReviewProvider implements ReviewProvider, GuidanceProvider, R
     messages: OpenAI.Chat.ChatCompletionMessageParam[],
     signal: AbortSignal | undefined,
     withSchema: boolean,
+    maxOutputTokens: number,
   ): Promise<OpenAI.Chat.ChatCompletion> {
     return this.client.chat.completions.create(
       {
         model: this.model,
         messages,
-        max_tokens: job.maxOutputTokens,
+        max_tokens: maxOutputTokens,
         ...(this.effort === undefined ? {} : { reasoning_effort: this.effort }),
         ...(withSchema
           ? {
@@ -295,6 +330,25 @@ export class OpenAIReviewProvider implements ReviewProvider, GuidanceProvider, R
       { signal },
     );
   }
+}
+
+/**
+ * True when the endpoint refused because of how much room was asked for.
+ *
+ * The status alone is not enough: a 429 for "too many requests" is not helped
+ * by a smaller answer, and retrying into it would only add load. So the message
+ * has to be about size or tokens as well.
+ */
+export function isTokenBudgetRejection(error: unknown): boolean {
+  if (!(error instanceof OpenAI.APIError)) {
+    return false;
+  }
+  if (error.status !== 400 && error.status !== 413 && error.status !== 429) {
+    return false;
+  }
+  return /too large|tokens per minute|\bTPM\b|max_tokens|max_output_tokens|token limit|context length/i.test(
+    error.message,
+  );
 }
 
 /** True when the endpoint refused the request because of the JSON schema. */
