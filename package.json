@@ -1,0 +1,131 @@
+{
+  "name": "navigator",
+  "displayName": "Navigator",
+  "description": "An AI pair-programming navigator that observes your changes and points out problems \u2014 without writing your code.",
+  "version": "0.1.0",
+  "license": "MIT",
+  "publisher": "navigator",
+  "private": true,
+  "engines": {
+    "vscode": "^1.90.0",
+    "node": ">=20"
+  },
+  "categories": [
+    "Linters",
+    "Programming Languages"
+  ],
+  "main": "./out/src/vscode/extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "commands": [
+      {
+        "command": "navigator.reviewChanges",
+        "title": "Review Current Changes",
+        "category": "Navigator"
+      },
+      {
+        "command": "navigator.clearObservations",
+        "title": "Clear Observations",
+        "category": "Navigator"
+      },
+      {
+        "command": "navigator.setApiKey",
+        "title": "Set API Key",
+        "category": "Navigator"
+      },
+      {
+        "command": "navigator.clearApiKey",
+        "title": "Clear API Key",
+        "category": "Navigator"
+      },
+      {
+        "command": "navigator.showLog",
+        "title": "Show Log",
+        "category": "Navigator"
+      }
+    ],
+    "configuration": {
+      "title": "Navigator",
+      "properties": {
+        "navigator.provider": {
+          "type": "string",
+          "enum": [
+            "anthropic",
+            "openai"
+          ],
+          "enumDescriptions": [
+            "Claude, via the Anthropic API.",
+            "GPT / Codex, via the OpenAI API."
+          ],
+          "default": "anthropic",
+          "markdownDescription": "Which service performs the review. Both are held to the same contract: the same prompt, the same response schema, and the same guarantee that Navigator never writes code."
+        },
+        "navigator.model": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Model used for review. Leave empty for the provider's default (`claude-opus-5` for Anthropic, `gpt-5.1-codex-max` for OpenAI)."
+        },
+        "navigator.reviewIntensity": {
+          "type": "string",
+          "enum": [
+            "silent",
+            "normal",
+            "strict"
+          ],
+          "default": "normal",
+          "markdownDescription": "How much Navigator is allowed to speak up.\n\n- `silent`: clear correctness bugs only\n- `normal`: correctness, edge cases, risky design\n- `strict`: adds security, performance, complexity and maintainability\n\nNo intensity ever allows Navigator to generate code."
+        },
+        "navigator.diffBase": {
+          "type": "string",
+          "default": "HEAD",
+          "markdownDescription": "Git revision the working tree is diffed against, e.g. `HEAD` or `origin/main`."
+        },
+        "navigator.includeUntracked": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Also review new files git is not tracking yet. Files ignored by `.gitignore` are never included, and Navigator reads them without ever writing to the index."
+        },
+        "navigator.maxDiffBytes": {
+          "type": "number",
+          "default": 200000,
+          "minimum": 1000,
+          "markdownDescription": "Diffs larger than this are not sent for review."
+        },
+        "navigator.maxObservations": {
+          "type": "number",
+          "default": 20,
+          "minimum": 1,
+          "markdownDescription": "Upper bound on observations reported for a single review."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -p ./ -w",
+    "typecheck": "tsc -p ./ --noEmit",
+    "lint": "eslint src test --max-warnings 0",
+    "test": "npm run compile && node --test \"out/test/**/*.test.js\"",
+    "verify": "npm run lint && npm run compile && node --test \"out/test/**/*.test.js\"",
+    "package": "npm run compile && vsce package -o navigator.vsix"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@types/node": "^22.10.0",
+    "@types/vscode": "^1.90.0",
+    "@typescript-eslint/eslint-plugin": "^8.18.0",
+    "@typescript-eslint/parser": "^8.18.0",
+    "@vscode/vsce": "^3.2.0",
+    "eslint": "^9.17.0",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.68.0"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.122.0",
+    "openai": "^7.8.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/eastasann/yuvava.git"
+  }
+}
