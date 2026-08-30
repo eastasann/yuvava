@@ -17,7 +17,7 @@ import { createReviewProvider } from '../core/providerFactory.js';
 import { ReviewUnavailableError } from '../core/provider.js';
 import { searchUrl } from '../core/search.js';
 import type { GuidanceReport } from '../core/guidance.js';
-import { currentWorkspaceFolder, readConfig } from './config.js';
+import { currentWorkspaceFolder, providerOptions, readConfig } from './config.js';
 import { promptForMissingApiKey, resolveApiKey } from './apiKey.js';
 import { readSelection } from './selection.js';
 import type { NavigatorStatusBar } from './statusBar.js';
@@ -163,12 +163,7 @@ export async function whereShouldILook(
     report = await runGuidance({
       question,
       ...(selection === undefined ? {} : { context: selection.context }),
-      provider: createReviewProvider({
-        kind: config.provider,
-        apiKey,
-        model: config.model,
-        baseUrl: config.openaiBaseUrl,
-      }),
+      provider: createReviewProvider(providerOptions(config, apiKey)),
       signal: abort.signal,
     });
   } catch (error) {

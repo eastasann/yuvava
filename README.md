@@ -125,6 +125,7 @@ from the VS Code command palette.
 | `navigator.model` | *(provider default)* | `claude-opus-5` or `gpt-5.1-codex-max` unless set. |
 | `navigator.openaiBaseUrl` | *(empty)* | An OpenAI-compatible endpoint to use instead of OpenAI. |
 | `navigator.reviewIntensity` | `normal` | `silent`, `normal` or `strict` (SPEC §15). |
+| `navigator.effort` | *(empty)* | How hard the model thinks before answering. Empty means the model's own default. |
 | `navigator.diffBase` | `HEAD` | Revision the working tree is compared against. |
 | `navigator.includeUntracked` | `true` | Also review new, untracked files. |
 | `navigator.maxDiffBytes` | `200000` | Diffs above this size are not sent. |

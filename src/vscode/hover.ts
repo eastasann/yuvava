@@ -21,7 +21,7 @@ import { ReviewUnavailableError } from '../core/provider.js';
 import { searchUrl } from '../core/search.js';
 import type { Observation } from '../core/types.js';
 import { promptForMissingApiKey, resolveApiKey } from './apiKey.js';
-import { currentWorkspaceFolder, readConfig } from './config.js';
+import { currentWorkspaceFolder, providerOptions, readConfig } from './config.js';
 import { buildGuidancePicks } from './guidance.js';
 import { observationAt, observationFor, rememberedReview } from './observationStore.js';
 import type { NavigatorStatusBar } from './statusBar.js';
@@ -111,12 +111,7 @@ export async function goDeeper(
     report = await runGuidance({
       question: buildObservationQuestion(observation),
       ...(observationContext === undefined ? {} : { context: observationContext }),
-      provider: createReviewProvider({
-        kind: config.provider,
-        apiKey,
-        model: config.model,
-        baseUrl: config.openaiBaseUrl,
-      }),
+      provider: createReviewProvider(providerOptions(config, apiKey)),
     });
   } catch (error) {
     const reason = error instanceof ReviewUnavailableError ? error.message : String(error);

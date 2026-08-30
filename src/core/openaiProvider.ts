@@ -20,6 +20,7 @@ import { REVIEW_OUTPUT_SCHEMA } from './schema.js';
 import { GUIDANCE_OUTPUT_SCHEMA } from './guidanceSchema.js';
 import { RECALL_OUTPUT_SCHEMA } from './recallSchema.js';
 import { readUsage } from './usage.js';
+import type { ReviewEffort } from './types.js';
 import {
   ReviewUnavailableError,
   type GuidanceProvider,
@@ -36,6 +37,29 @@ export const DEFAULT_OPENAI_MODEL = 'gpt-5.1-codex-max';
 
 /** Reasoning models spend tokens before they answer; leave room for both. */
 const MAX_OUTPUT_TOKENS = 8192;
+
+/**
+ * What OpenAI accepts, which is a shorter ladder than Anthropic's.
+ *
+ * `xhigh` and `max` have no counterpart, so they land on `high` rather than
+ * being dropped: the developer asked for as much thinking as possible, and
+ * `high` is as much as this provider has.
+ */
+type OpenAIEffort = 'low' | 'medium' | 'high';
+
+function toOpenAIEffort(effort: ReviewEffort | undefined): OpenAIEffort | undefined {
+  switch (effort) {
+    case 'low':
+    case 'medium':
+    case 'high':
+      return effort;
+    case 'xhigh':
+    case 'max':
+      return 'high';
+    default:
+      return undefined;
+  }
+}
 
 const REVIEW_SCHEMA_NAME = 'navigator_review';
 const GUIDANCE_SCHEMA_NAME = 'navigator_guidance';
@@ -54,6 +78,8 @@ interface Job {
 export interface OpenAIProviderOptions {
   readonly apiKey: string;
   readonly model?: string;
+  /** Absent or empty leaves the model's own default in place. */
+  readonly effort?: ReviewEffort;
   /**
    * An OpenAI-compatible base URL. Empty means OpenAI itself.
    * Setting it switches the request to Chat Completions.
@@ -67,6 +93,7 @@ export class OpenAIReviewProvider implements ReviewProvider, GuidanceProvider, R
   private readonly client: OpenAI;
   private readonly model: string;
   private readonly compatible: boolean;
+  private readonly effort: OpenAIEffort | undefined;
 
   constructor(options: OpenAIProviderOptions) {
     const baseUrl = options.baseUrl?.trim();
@@ -80,6 +107,7 @@ export class OpenAIReviewProvider implements ReviewProvider, GuidanceProvider, R
       ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
     });
     this.model = options.model?.trim() || DEFAULT_OPENAI_MODEL;
+    this.effort = toOpenAIEffort(options.effort);
   }
 
   review(request: ReviewRequest): Promise<ProviderResponse> {
@@ -135,6 +163,7 @@ export class OpenAIReviewProvider implements ReviewProvider, GuidanceProvider, R
           instructions: job.system,
           input: job.user,
           max_output_tokens: MAX_OUTPUT_TOKENS,
+          ...(this.effort === undefined ? {} : { reasoning: { effort: this.effort } }),
           text: {
             format: {
               type: 'json_schema',
@@ -228,6 +257,7 @@ export class OpenAIReviewProvider implements ReviewProvider, GuidanceProvider, R
         model: this.model,
         messages,
         max_tokens: MAX_OUTPUT_TOKENS,
+        ...(this.effort === undefined ? {} : { reasoning_effort: this.effort }),
         ...(withSchema
           ? {
               response_format: {

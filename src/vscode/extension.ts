@@ -15,7 +15,7 @@ import { ReviewUnavailableError } from '../core/provider.js';
 import { runReview } from '../core/review.js';
 import type { ProviderKind } from '../core/types.js';
 import { promptForMissingApiKey, resolveApiKey, setApiKey } from './apiKey.js';
-import { currentWorkspaceFolder, readConfig } from './config.js';
+import { currentWorkspaceFolder, providerOptions, readConfig } from './config.js';
 import { publishObservations } from './diagnostics.js';
 import { whereShouldILook } from './guidance.js';
 import { GO_DEEPER_COMMAND, goDeeper, registerObservationHover } from './hover.js';
@@ -155,12 +155,7 @@ async function reviewCurrentChanges(
           intensity: config.intensity,
           maxObservations: config.maxObservations,
           maxDiffBytes: config.maxDiffBytes,
-          provider: createReviewProvider({
-            kind: config.provider,
-            apiKey,
-            model: config.model,
-            baseUrl: config.openaiBaseUrl,
-          }),
+          provider: createReviewProvider(providerOptions(config, apiKey)),
           signal: abort.signal,
         });
 

@@ -658,3 +658,30 @@ An OpenAI-compatible endpoint that reports nothing logs
 compatible path is endpoints that implement only part of the API, so a missing
 `usage` must never be an error. The note goes last in the list so it can never
 displace a warning.
+
+## Decision: Effort is a setting, and its default stays "whatever the model does"
+
+`navigator.effort` reaches `output_config.effort` on Anthropic and
+`reasoning_effort` / `reasoning.effort` on OpenAI. Unset — the default — sends
+nothing at all, so the request is byte-for-byte what it was before the setting
+existed.
+
+Reason for adding it at all:
+`LOOP.md` §6.6 says not to grow a configuration system, and this is the
+exception that earns itself: for this job the input is small and the thinking
+dominates the bill, so effort is the one setting that changes what a review
+costs. That is not a preference, it is a budget.
+
+Reason the default does not move:
+Lowering it would be cheaper and might be worse, and nobody has measured which.
+#19 made the cost visible and #17 makes the quality measurable; changing the
+default before both have been run against a real endpoint would be swapping a
+known default for a guess. When it does move, the measurement goes here.
+
+Consequences:
+- `xhigh` and `max` have no OpenAI counterpart and are sent as `high` rather
+  than dropped: the developer asked for as much thinking as possible, and that
+  is as much as that provider has.
+- Nothing is sent to an OpenAI-compatible endpoint unless the setting is
+  explicitly set, so an endpoint that rejects `reasoning_effort` is only
+  reachable by someone who asked for it.

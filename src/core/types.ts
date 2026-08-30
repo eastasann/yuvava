@@ -15,6 +15,17 @@ export type ProviderKind = 'anthropic' | 'openai';
 
 export const PROVIDER_KINDS: readonly ProviderKind[] = ['anthropic', 'openai'];
 
+/**
+ * How hard the model is asked to think before answering.
+ *
+ * Empty means "whatever the provider does by default", which is the default
+ * here: nobody has measured what a lower setting costs in review quality, so
+ * changing the default would be a guess. See `DECISIONS.md`.
+ */
+export type ReviewEffort = '' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+
+export const REVIEW_EFFORTS: readonly ReviewEffort[] = ['', 'low', 'medium', 'high', 'xhigh', 'max'];
+
 /** Review strength. No intensity ever permits code generation. */
 export type ReviewIntensity = 'silent' | 'normal' | 'strict';
 

@@ -10,7 +10,7 @@
 import { AnthropicReviewProvider, DEFAULT_ANTHROPIC_MODEL } from './anthropicProvider.js';
 import { OpenAIReviewProvider, DEFAULT_OPENAI_MODEL } from './openaiProvider.js';
 import type { NavigatorProvider } from './provider.js';
-import type { ProviderKind } from './types.js';
+import type { ProviderKind, ReviewEffort } from './types.js';
 
 export interface ProviderProfile {
   readonly kind: ProviderKind;
@@ -51,6 +51,8 @@ export interface CreateProviderOptions {
   readonly model?: string;
   /** OpenAI-compatible endpoint. Ignored by providers that have no such notion. */
   readonly baseUrl?: string;
+  /** Empty or absent means "the provider's own default". */
+  readonly effort?: ReviewEffort;
   readonly fetch?: typeof globalThis.fetch;
 }
 
@@ -59,6 +61,7 @@ export function createReviewProvider(options: CreateProviderOptions): NavigatorP
   const shared = {
     apiKey: options.apiKey,
     model,
+    ...(options.effort === undefined || options.effort === '' ? {} : { effort: options.effort }),
     ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
   };
   return options.kind === 'openai'

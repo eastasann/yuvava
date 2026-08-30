@@ -95,6 +95,27 @@
           "default": "normal",
           "markdownDescription": "How much Navigator is allowed to speak up.\n\n- `silent`: clear correctness bugs only\n- `normal`: correctness, edge cases, risky design\n- `strict`: adds security, performance, complexity and maintainability\n\nNo intensity ever allows Navigator to generate code."
         },
+        "navigator.effort": {
+          "type": "string",
+          "enum": [
+            "",
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ],
+          "enumDescriptions": [
+            "Whatever the model does by default.",
+            "Least thinking, least cost, most likely to miss something.",
+            "Less thinking than the default.",
+            "The usual default for a reasoning model.",
+            "More thinking than high (Anthropic only; sent as high to OpenAI).",
+            "As much thinking as the model will do (Anthropic only; sent as high to OpenAI)."
+          ],
+          "default": "",
+          "markdownDescription": "How hard the model thinks before answering. This is the cost dial: for a review the input is small and the thinking dominates, so a lower setting is cheaper and a higher one is slower.\n\nLeave it empty unless you have a reason. Nobody has measured what a lower setting costs in review quality, so the default is the model's own."
+        },
         "navigator.diffBase": {
           "type": "string",
           "default": "HEAD",
