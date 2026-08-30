@@ -13,8 +13,8 @@ The four surfaces §12 asks for — Diagnostics, Problems panel, Hover, Status B
 The working tree is clean and `npm run verify` is green.
 
 **Nothing here has ever been used against a real endpoint, or inside a real
-VS Code.** That single fact is the whole of what is left, and it is why the two
-open issues are open. Everything below that sounds like a capability is a
+VS Code.** That single fact is the whole of what is left, and everything still
+open traces back to it. Anything below that sounds like a capability is a
 capability whose *tests* pass; treat "it works" as unproven until `npm run
 smoke` has been run once by someone with an API key.
 
