@@ -311,6 +311,16 @@ esbuild, or `await import()`ing only the selected provider, are both easy
 levers — worth pulling if download size or activation time ever matters, and
 not before.
 
+Asked again and answered the same way (issue #21, closed not planned). The
+package is 6.94 MB across 5,527 files, of which Navigator's own compiled
+output is 152 KB. That ratio is embarrassing and costs nothing: the extension
+is installed from a local file, so there is no download, and the SDKs load
+when a command runs rather than at activation, so there is no startup cost
+either. Bundling would add a build step and a class of failure — SDKs that
+require lazily do not always survive tree-shaking — to fix a number nobody is
+paying. The trigger stands: a measured cost in download time or activation
+time. Not the number itself.
+
 ## Decision: The way in is a question box and a QuickPick, not a panel
 
 `Navigator: Where Should I Look?` asks one question in an input box, and shows
@@ -797,3 +807,84 @@ out to a model — `npm run smoke` is that.
 Status: written, loadable, and never run. This environment cannot even
 download VS Code (`update.code.visualstudio.com` is outside its egress
 allowlist), which is issue #18 and is recorded in `PROGRESS.md`.
+
+## Decision: No review history — not planned
+
+`SPEC.md` §19 lists "Review history" among the Optional items and never defines
+it. Issue #12 found three readings, and it is closed not planned rather than
+left open, because the missing thing is not a decision — it is a demand.
+
+The three readings, and why none is built:
+
+1. **Look back at past reviews.** Nothing in the loop this product describes —
+   write, review, fix, continue — involves re-reading an old review. The
+   diagnostics are on screen while they matter and gone when they do not, and
+   that transience is the same property that keeps Navigator from becoming a
+   thing one converses with.
+2. **Never show a dismissed observation twice.** This one has real value and is
+   the only one worth reopening for: it serves SPEC §7 directly. It needs
+   persistent per-observation state, which is the same storage question as
+   §21.4 (see its entry), and it needs to know that the same false positive
+   *actually* recurs. Nobody has seen a review yet, so that is a guess.
+3. **Aggregate what gets flagged.** That is review-quality measurement, which
+   is `test/eval/`, not a feature of the extension.
+
+When to revisit:
+Reading 2, when `feedback` issues show the same observation being ignored
+across several reviews. That report is the demand; until it exists, this would
+be a store, a lifecycle and a settings entry built on a hunch.
+
+## Decision: If Navigator ever remembers, it remembers in `globalState`
+
+SPEC §21.4 (fewer hints for things asked about repeatedly) needs Navigator to
+remember what has been asked. Issue #15 asked where that could live without
+touching the invariant. Deciding it now, so the next agent does not have to
+re-derive it before it can start:
+
+**`ExtensionContext.globalState`, and nothing else.** Not a file, not
+`workspaceState`, not settings.
+
+Why it does not touch SPEC §16:
+The invariant is about *user implementation code*. `globalState` is a key-value
+store VS Code owns, in VS Code's own storage directory; it is not in the
+workspace, it is not a file Navigator opens, and writing to it cannot change a
+line the developer wrote. The banned list in `test/invariant.test.ts` is
+`workspace.fs` and the `node:fs` write calls — the routes to a *user file* —
+and `globalState` is none of them. Nothing in that test needs to change, and
+weakening it to allow one would be the wrong move: if a future feature needs a
+real file, that is the signal to stop, not to edit the list.
+
+Why global and not per workspace:
+What the developer keeps forgetting is a property of the developer, not of the
+repository they happen to be in. Per-workspace state would reset the decay
+every time they started a project, which is precisely backwards.
+
+What is still undecided, and deliberately so:
+The key (an API name? the shape of the question?), the threshold, and the
+decay curve. Those need to be fitted to how someone actually uses this, and
+guessing at them produces a feature that behaves oddly for reasons nobody can
+explain. See `PROGRESS.md` — that is what #15 is blocked on.
+
+Whatever is built must be resettable by a command, because a wrong threshold
+otherwise looks exactly like the extension breaking.
+
+## Decision: Context-aware review waits for the eval, not for an opinion
+
+SPEC §21.3 would let a review see call sites, related types, tests and git
+history. Issue #14 identifies the real motivation — the most likely false
+positive is a null warning on a value the *caller* already guarded, which the
+prompt cannot fix because the caller is not in the diff.
+
+The approach is settled and the sequencing is not negotiable:
+1. Call sites first, alone. They are the ones that would kill that false
+   positive, and nothing else is worth a multiple of the input cost until one
+   thing has been shown to help.
+2. Measured with `npm run eval`, comparing the false-positive rate with and
+   without the extra context. That is what the eval set was built for.
+3. Read-only APIs only — `vscode.workspace.openTextDocument`, never
+   `workspace.fs` — and `git log` would have to be added to the allowlist in
+   `src/core/git.ts` explicitly if history is ever wanted.
+4. A hard cap on added input, because "read what seems relevant" has no bound.
+
+Not started, on purpose: without a measurement, adding context is a change that
+triples the input cost on a hope. `PROGRESS.md` records what it is waiting for.
