@@ -144,20 +144,43 @@ src/core/     no `vscode` import, ever — this boundary is enforced by a test
   untracked.ts         new files rendered as an all-added diff (no `git add -N`)
   workspaceDiff.ts     tracked + untracked, composed
   diff.ts              unified-diff parsing and line-numbered rendering
-  prompt.ts            the Navigator persona (SPEC §17)
-  schema.ts            response schema + validation of whatever comes back
-  sanitize.ts          the structural no-code-generation guard
+  prompt.ts            the Navigator persona for review (SPEC §17)
+  schema.ts            review schema + validation of whatever comes back
+  sanitize.ts          the structural no-code-generation guard (review path)
+  hintSanitize.ts      the hint path's looser rule — a hole, never a fix (§8)
   anchor.ts            issues -> observations, anchored to reviewed lines
   range.ts             where the underline goes
-  provider.ts          the ReviewProvider seam
+  provider.ts          the seam: one method per job, no generic "ask anything"
   anthropicProvider.ts / openaiProvider.ts / providerFactory.ts
-  review.ts            the pipeline
-src/vscode/   thin adapter: commands, diagnostics, status bar, config
+  usage.ts             what a request cost, across three wire shapes
+  review.ts            the review pipeline
+  guidancePrompt/Schema.ts, guidance.ts    "where should I look" (§10, §8, §21.6)
+  recallPrompt/Schema.ts, recall.ts        "what was it called" (§9)
+  observationHints.ts  one observation -> a question for the guidance path
+  docsIndex.ts         MDN search; the only source of a displayed URL
+  search.ts            a term -> a plain web search
+  selectionContext.ts  an editor selection, capped and described
+src/vscode/   thin adapter, one file per command
+  extension.ts         activation and the review command
+  guidance.ts / recall.ts / hover.ts       the three question commands
+  selection.ts         the only file that touches a TextEditor
+  observationStore.ts  the last review, in memory, for the hover
+  diagnostics.ts / statusBar.ts / config.ts / apiKey.ts
 test/         unit tests; `invariant.test.ts` guards the rule above
+  eval/                the review-quality set and its scorer (SPEC §7)
+scripts/      not part of the gate; each needs something a container lacks
+  smoke.mjs            one real request down every network path (needs a key)
+  eval.mjs             review quality against a real endpoint (needs a key)
+  test-host.mjs + host/index.cjs   checks inside a real VS Code (needs a display)
 ```
 
 New logic goes in `src/core/` with a test. `src/vscode/` should stay thin
 enough that its correctness is obvious by reading it.
+
+A new job for the model is a method on both providers plus a prompt and a
+schema — about thirty lines. That cost is deliberate: there is no generic
+"ask the model anything" call, so every prompt stays on Navigator's side of
+the seam. See `DECISIONS.md`.
 
 ## Conventions
 
@@ -174,8 +197,9 @@ enough that its correctness is obvious by reading it.
 ## Providers
 
 Anthropic (default, `claude-opus-5`) and OpenAI (`gpt-5.1-codex-max`), selected
-by `navigator.provider`. Both use the same prompt, the same JSON schema, and
-the same validation. If you add a third, it goes behind `ReviewProvider` and
+by `navigator.provider`. Both implement `review`, `guide` and `recall`, all
+using the prompts and schemas in `src/core/`, and every answer goes through the
+same validation. If you add a third, it goes behind those interfaces and
 `providerFactory.ts`, and it changes nothing about what Navigator does with the
 answer.
 

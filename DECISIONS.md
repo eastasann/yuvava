@@ -833,3 +833,58 @@ out to a model — `npm run smoke` is that.
 Status: written, loadable, and never run. This environment cannot even
 download VS Code (`update.code.visualstudio.com` is outside its egress
 allowlist), which is issue #18 and is recorded in `PROGRESS.md`.
+
+## Decision: If Navigator ever remembers, it remembers in `globalState`
+
+SPEC §21.4 (fewer hints for things asked about repeatedly) needs Navigator to
+remember what has been asked. Issue #15 asked where that could live without
+touching the invariant. Deciding it now, so the next agent does not have to
+re-derive it before it can start:
+
+**`ExtensionContext.globalState`, and nothing else.** Not a file, not
+`workspaceState`, not settings.
+
+Why it does not touch SPEC §16:
+The invariant is about *user implementation code*. `globalState` is a key-value
+store VS Code owns, in VS Code's own storage directory; it is not in the
+workspace, it is not a file Navigator opens, and writing to it cannot change a
+line the developer wrote. The banned list in `test/invariant.test.ts` is
+`workspace.fs` and the `node:fs` write calls — the routes to a *user file* —
+and `globalState` is none of them. Nothing in that test needs to change, and
+weakening it to allow one would be the wrong move: if a future feature needs a
+real file, that is the signal to stop, not to edit the list.
+
+Why global and not per workspace:
+What the developer keeps forgetting is a property of the developer, not of the
+repository they happen to be in. Per-workspace state would reset the decay
+every time they started a project, which is precisely backwards.
+
+What is still undecided, and deliberately so:
+The key (an API name? the shape of the question?), the threshold, and the
+decay curve. Those need to be fitted to how someone actually uses this, and
+guessing at them produces a feature that behaves oddly for reasons nobody can
+explain. See `PROGRESS.md` — that is what #15 is blocked on.
+
+Whatever is built must be resettable by a command, because a wrong threshold
+otherwise looks exactly like the extension breaking.
+
+## Decision: Context-aware review waits for the eval, not for an opinion
+
+SPEC §21.3 would let a review see call sites, related types, tests and git
+history. Issue #14 identifies the real motivation — the most likely false
+positive is a null warning on a value the *caller* already guarded, which the
+prompt cannot fix because the caller is not in the diff.
+
+The approach is settled and the sequencing is not negotiable:
+1. Call sites first, alone. They are the ones that would kill that false
+   positive, and nothing else is worth a multiple of the input cost until one
+   thing has been shown to help.
+2. Measured with `npm run eval`, comparing the false-positive rate with and
+   without the extra context. That is what the eval set was built for.
+3. Read-only APIs only — `vscode.workspace.openTextDocument`, never
+   `workspace.fs` — and `git log` would have to be added to the allowlist in
+   `src/core/git.ts` explicitly if history is ever wanted.
+4. A hard cap on added input, because "read what seems relevant" has no bound.
+
+Not started, on purpose: without a measurement, adding context is a change that
+triples the input cost on a hope. `PROGRESS.md` records what it is waiting for.
