@@ -14,8 +14,25 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { EVAL_CASES, expectationsAt, newFileDiff, rewriteDiff } from './eval/cases.js';
-import { LINE_TOLERANCE, formatScorecard, matches, scoreAll, scoreCase } from './eval/score.js';
-import { STAND_IN_KEYS, answerFor, loadRecordings } from './eval/recorded.js';
+import {
+  LINE_TOLERANCE,
+  formatScorecard,
+  matches,
+  scoreAll,
+  scoreGuidanceCase,
+  scoreRecallCase,
+  scoreReviewCase,
+} from './eval/score.js';
+import { GUIDANCE_CASES, RECALL_CASES } from './eval/questionCases.js';
+import {
+  QUESTION_STAND_IN_KEYS,
+  STAND_IN_KEYS,
+  answerFor,
+  loadRecordings,
+  questionAnswerFor,
+} from './eval/recorded.js';
+import { parseGuidanceResponse } from '../src/core/guidanceSchema.js';
+import { parseRecallResponse } from '../src/core/recallSchema.js';
 import { isLineInDiff, parseUnifiedDiff, reviewableFiles } from '../src/core/diff.js';
 import { runReview } from '../src/core/review.js';
 import { REVIEW_INTENSITIES, type Observation, type ReviewIntensity } from '../src/core/types.js';
@@ -139,7 +156,7 @@ describe('the scorer', () => {
   assert.ok(buggy && silent);
 
   it('counts a hit as matched and nothing else', () => {
-    const result = scoreCase(buggy, 'normal', { observations: [observation()] });
+    const result = scoreReviewCase(buggy, 'normal', { observations: [observation()] });
     assert.equal(result.matched, 1);
     assert.equal(result.missed.length, 0);
     assert.equal(result.unexpected.length, 0);
@@ -147,7 +164,7 @@ describe('the scorer', () => {
 
   it('counts an extra observation on a real bug as noise, not as a miss', () => {
     const extra = observation({ line: 2, message: 'The intermediate array could be avoided.' });
-    const card = scoreAll('normal', [scoreCase(buggy, 'normal', { observations: [observation(), extra] })]);
+    const card = scoreAll('normal', [scoreReviewCase(buggy, 'normal', { observations: [observation(), extra] })]);
     assert.equal(card.missed, 0);
     assert.equal(card.noise, 1);
     assert.equal(card.falsePositives, 0);
@@ -156,7 +173,7 @@ describe('the scorer', () => {
 
   it('counts anything at all on a silent case as a false positive', () => {
     const card = scoreAll('normal', [
-      scoreCase(silent, 'normal', {
+      scoreReviewCase(silent, 'normal', {
         observations: [observation({ file: 'src/date.js', line: 1, message: 'Consider a different name.' })],
       }),
     ]);
@@ -167,13 +184,13 @@ describe('the scorer', () => {
   });
 
   it('counts silence on a silent case as the correct answer', () => {
-    const card = scoreAll('normal', [scoreCase(silent, 'normal', { observations: [] })]);
+    const card = scoreAll('normal', [scoreReviewCase(silent, 'normal', { observations: [] })]);
     assert.equal(card.silenceCorrectness, 1);
-    assert.equal(card.observations, 0);
+    assert.equal(card.answers, 0);
   });
 
   it('counts a missed bug', () => {
-    const card = scoreAll('normal', [scoreCase(buggy, 'normal', { observations: [] })]);
+    const card = scoreAll('normal', [scoreReviewCase(buggy, 'normal', { observations: [] })]);
     assert.equal(card.missed, 1);
     assert.equal(card.missRate, 1);
   });
@@ -183,14 +200,14 @@ describe('the scorer', () => {
       ...buggy,
       expected: [buggy.expected[0], { ...buggy.expected[0], mentions: ['empty'] }],
     };
-    const result = scoreCase(twoBugs, 'normal', { observations: [observation()] });
+    const result = scoreReviewCase(twoBugs, 'normal', { observations: [observation()] });
     assert.equal(result.matched, 1);
     assert.equal(result.missed.length, 1);
   });
 
   it('sets a failed review aside instead of scoring it as silence', () => {
     const card = scoreAll('normal', [
-      scoreCase(silent, 'normal', { observations: [], failure: 'the API key was rejected' }),
+      scoreReviewCase(silent, 'normal', { observations: [], failure: 'the API key was rejected' }),
     ]);
     assert.equal(card.failures, 1);
     assert.equal(card.scored, 0);
@@ -198,8 +215,8 @@ describe('the scorer', () => {
   });
 
   it('formats one comparable line per intensity', () => {
-    const line = formatScorecard(scoreAll('normal', [scoreCase(buggy, 'normal', { observations: [observation()] })]));
-    assert.match(line, /^normal /);
+    const line = formatScorecard(scoreAll('normal', [scoreReviewCase(buggy, 'normal', { observations: [observation()] })]));
+    assert.match(line, /^normal\s/);
     assert.match(line, /miss\s+0\.0%/);
     assert.match(line, /silence/);
   });
@@ -230,7 +247,7 @@ describe('the eval end to end, against answers rather than a model', () => {
         maxDiffBytes: 200000,
         provider: providerReplaying(answer.text),
       });
-      results.push(scoreCase(testCase, intensity, { observations: report.observations }));
+      results.push(scoreReviewCase(testCase, intensity, { observations: report.observations }));
     }
     return scoreAll(intensity, results);
   }
@@ -287,7 +304,7 @@ describe('the eval end to end, against answers rather than a model', () => {
     const quiet = await runAll('silent', none);
     assert.equal(quiet.expected, 2);
     assert.equal(quiet.missed, 0);
-    assert.equal(quiet.observations, 2, 'at silent, only the two clear bugs are spoken about');
+    assert.equal(quiet.answers, 2, 'at silent, only the two clear bugs are spoken about');
   });
 
   it('turns an unusable answer into silence rather than a failure', async () => {
@@ -300,5 +317,140 @@ describe('the eval end to end, against answers rather than a model', () => {
     });
     assert.equal(report.status, 'reviewed');
     assert.deepEqual(report.observations, []);
+  });
+});
+
+describe('the question paths are measured too (#37)', () => {
+  function guidanceOutcome(caseId: string) {
+    const answer = questionAnswerFor('guidance', caseId, new Map());
+    assert.ok(answer, `no stand-in for guidance:${caseId}`);
+    const parsed = parseGuidanceResponse(answer.text);
+    return { topics: parsed.topics.map((topic) => topic.name), searches: [...parsed.searches] };
+  }
+
+  function recallOutcome(caseId: string) {
+    const answer = questionAnswerFor('recall', caseId, new Map());
+    assert.ok(answer, `no stand-in for recall:${caseId}`);
+    return { candidates: parseRecallResponse(answer.text).candidates.map((entry) => entry.name) };
+  }
+
+  it('has a question set that is invented, and covers silence', () => {
+    assert.ok(GUIDANCE_CASES.some((testCase) => testCase.silent));
+    assert.ok(RECALL_CASES.some((testCase) => testCase.silent));
+    for (const testCase of [...GUIDANCE_CASES, ...RECALL_CASES]) {
+      if (testCase.silent) {
+        assert.deepEqual(testCase.expected, [], `${testCase.id} is silent but expects something`);
+      }
+    }
+  });
+
+  it('has an answer on file for every question case', () => {
+    for (const testCase of GUIDANCE_CASES) {
+      assert.ok(QUESTION_STAND_IN_KEYS.includes(`guidance:${testCase.id}`), testCase.id);
+    }
+    for (const testCase of RECALL_CASES) {
+      assert.ok(QUESTION_STAND_IN_KEYS.includes(`recall:${testCase.id}`), testCase.id);
+    }
+  });
+
+  it('counts a specific answer as a hit, with no noise', () => {
+    const testCase = GUIDANCE_CASES.find((entry) => entry.id === 'fetch-retry');
+    assert.ok(testCase);
+    const result = scoreGuidanceCase(testCase, guidanceOutcome('fetch-retry'));
+    assert.equal(result.matched, 2);
+    assert.deepEqual(result.missed, []);
+    assert.deepEqual(result.unexpected, []);
+  });
+
+  it('counts filler as noise, which is what §7 means on this path', () => {
+    // "error handling" and "testing" are true of any task and say nothing.
+    const testCase = GUIDANCE_CASES.find((entry) => entry.id === 'parse-api-date');
+    assert.ok(testCase);
+    const result = scoreGuidanceCase(testCase, guidanceOutcome('parse-api-date'));
+    assert.deepEqual(result.unexpected, ['error handling', 'testing']);
+    assert.equal(result.matched, 1, 'ISO 8601 still counts; the time zone was missed');
+  });
+
+  it('does not count an unpredicted topic as noise', () => {
+    // Only filler is noise here. A useful topic the fixture never thought of
+    // would otherwise be punished, which would measure the fixture.
+    const testCase = GUIDANCE_CASES.find((entry) => entry.id === 'fetch-retry');
+    assert.ok(testCase);
+    const result = scoreGuidanceCase(testCase, {
+      topics: ['exponential backoff', '4xx versus 5xx', 'Retry-After'],
+      searches: [],
+    });
+    assert.deepEqual(result.unexpected, []);
+  });
+
+  it('counts anything at all on an unanswerable question as a false positive', () => {
+    const testCase = GUIDANCE_CASES.find((entry) => entry.id === 'silent-not-a-question');
+    assert.ok(testCase);
+    const card = scoreAll('guidance', [scoreGuidanceCase(testCase, guidanceOutcome('silent-not-a-question'))]);
+    assert.equal(card.falsePositives, 1);
+    assert.equal(card.silenceCorrectness, 0);
+  });
+
+  it('counts silence on an unanswerable question as correct', () => {
+    const testCase = GUIDANCE_CASES.find((entry) => entry.id === 'silent-no-referent');
+    assert.ok(testCase);
+    const card = scoreAll('guidance', [scoreGuidanceCase(testCase, guidanceOutcome('silent-no-referent'))]);
+    assert.equal(card.silenceCorrectness, 1);
+    assert.equal(card.answers, 0);
+  });
+
+  it('counts extra recall candidates as noise, because a menu is not remembering', () => {
+    const testCase = RECALL_CASES.find((entry) => entry.id === 'query-string');
+    assert.ok(testCase);
+    const result = scoreRecallCase(testCase, recallOutcome('query-string'));
+    assert.equal(result.matched, 1);
+    assert.deepEqual(result.unexpected, ['URL.searchParams', 'encodeURIComponent']);
+  });
+
+  it('counts one confident recall as a clean hit', () => {
+    const testCase = RECALL_CASES.find((entry) => entry.id === 'fold-an-array');
+    assert.ok(testCase);
+    const result = scoreRecallCase(testCase, recallOutcome('fold-an-array'));
+    assert.equal(result.matched, 1);
+    assert.deepEqual(result.unexpected, []);
+  });
+
+  it('scores all three paths into the same four numbers', () => {
+    const review = scoreAll('normal', [
+      scoreReviewCase(EVAL_CASES[0], 'normal', { observations: [] }),
+    ]);
+    const guidance = scoreAll('guidance', GUIDANCE_CASES.map((testCase) =>
+      scoreGuidanceCase(testCase, guidanceOutcome(testCase.id)),
+    ));
+    const recall = scoreAll('recall', RECALL_CASES.map((testCase) =>
+      scoreRecallCase(testCase, recallOutcome(testCase.id)),
+    ));
+
+    for (const card of [review, guidance, recall]) {
+      for (const key of ['missRate', 'falsePositiveRate', 'noiseRate', 'silenceCorrectness'] as const) {
+        assert.equal(typeof card[key], 'number', `${card.label} has no ${key}`);
+        assert.ok(card[key] >= 0 && card[key] <= 1, `${card.label} ${key} = ${card[key]}`);
+      }
+      assert.match(formatScorecard(card), /miss .*false-positive .*noise .*silence/);
+    }
+  });
+
+  it('turns the stand-ins into the numbers they were written to produce', () => {
+    const guidance = scoreAll('guidance', GUIDANCE_CASES.map((testCase) =>
+      scoreGuidanceCase(testCase, guidanceOutcome(testCase.id)),
+    ));
+    assert.equal(guidance.expected, 6);
+    assert.equal(guidance.missed, 1, 'the time zone is not named in the vague answer');
+    assert.equal(guidance.noise, 2, 'error handling and testing');
+    assert.equal(guidance.falsePositives, 1, 'one answer to a question that was not one');
+    assert.equal(guidance.silentCases, 2);
+    assert.equal(guidance.silentCasesCorrect, 1);
+
+    const recall = scoreAll('recall', RECALL_CASES.map((testCase) =>
+      scoreRecallCase(testCase, recallOutcome(testCase.id)),
+    ));
+    assert.equal(recall.missed, 0);
+    assert.equal(recall.noise, 2, 'two extra candidates beside the name that was wanted');
+    assert.equal(recall.silenceCorrectness, 1);
   });
 });

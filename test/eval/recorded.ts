@@ -202,14 +202,20 @@ export function loadRecordings(): ReadonlyMap<string, string> {
   }
 
   for (const name of names) {
-    const parsed = /^(.+)\.(silent|normal|strict)\.json$/.exec(name);
+    const parsed = /^(.+)\.(silent|normal|strict|guidance|recall)\.json$/.exec(name);
     if (parsed === null) {
       continue;
     }
     try {
       const body: unknown = JSON.parse(readFileSync(path.join(RECORDINGS_DIR, name), 'utf8'));
       if (typeof body === 'object' && body !== null && typeof (body as { text?: unknown }).text === 'string') {
-        found.set(`${parsed[1]}:${parsed[2]}`, (body as { text: string }).text);
+        // A question recording is keyed the other way round — `guidance:<id>` —
+        // because a path is not an intensity.
+        const key =
+          parsed[2] === 'guidance' || parsed[2] === 'recall'
+            ? `${parsed[2]}:${parsed[1]}`
+            : `${parsed[1]}:${parsed[2]}`;
+        found.set(key, (body as { text: string }).text);
       }
     } catch {
       // A corrupt recording is skipped; the stand-in covers for it.
@@ -232,4 +238,93 @@ export function answerFor(
   return standIn === undefined ? undefined : { text: standIn, real: false };
 }
 
+/**
+ * Stand-ins for the question paths, written to exercise each way they fail:
+ * a good answer, a vague one, a guess where silence was right.
+ */
+const QUESTION_STAND_INS: Readonly<Record<string, string>> = {
+  'guidance:fetch-retry': JSON.stringify({
+    topics: [
+      { name: 'exponential backoff', note: 'how long to wait between attempts' },
+      { name: '4xx versus 5xx', note: 'which failures are worth repeating' },
+    ],
+    searches: ['MDN fetch', 'idempotent request retry'],
+    hints: ['A third attempt is not the same as a second one.'],
+    explore: ['Retry-After'],
+  }),
+  'guidance:cancel-in-flight': JSON.stringify({
+    topics: [
+      { name: 'AbortController', note: 'how a request is called off' },
+      { name: 'debounce', note: 'how often to start one at all' },
+    ],
+    searches: ['MDN AbortController'],
+    hints: [],
+    explore: [],
+  }),
+  // Vague: true of any task, and worth nothing. This is what noise means here.
+  'guidance:parse-api-date': JSON.stringify({
+    topics: [
+      { name: 'ISO 8601', note: 'the shape the string is probably in' },
+      { name: 'error handling', note: 'what to do when it does not parse' },
+      { name: 'testing', note: 'how to be sure' },
+    ],
+    searches: ['MDN Date parse'],
+    hints: [],
+    explore: [],
+  }),
+  'guidance:silent-no-referent': JSON.stringify({ topics: [], searches: [], hints: [], explore: [] }),
+  // A false positive: nothing was asked, and it answered anyway.
+  'guidance:silent-not-a-question': JSON.stringify({
+    topics: [{ name: 'code quality', note: 'keeping things tidy' }],
+    searches: [],
+    hints: [],
+    explore: [],
+  }),
+
+  'recall:fold-an-array': JSON.stringify({
+    candidates: [
+      {
+        name: 'Array.prototype.reduce',
+        signature: 'reduce(callbackFn, initialValue?)',
+        concept: 'Walks the array in order, folding it into a single value.',
+        search: 'MDN Array reduce',
+      },
+    ],
+  }),
+  // Noise: the name was found, and then two more were offered beside it.
+  'recall:query-string': JSON.stringify({
+    candidates: [
+      { name: 'URLSearchParams', signature: '', concept: '', search: 'MDN URLSearchParams' },
+      { name: 'URL.searchParams', signature: '', concept: '', search: '' },
+      { name: 'encodeURIComponent', signature: '', concept: '', search: '' },
+    ],
+  }),
+  'recall:wait-for-all': JSON.stringify({
+    candidates: [
+      {
+        name: 'Promise.allSettled',
+        signature: 'allSettled(iterable)',
+        concept: 'Waits for every promise and reports each outcome.',
+        search: 'MDN Promise allSettled',
+      },
+    ],
+  }),
+  'recall:silent-unidentifiable': JSON.stringify({ candidates: [] }),
+};
+
+export function questionAnswerFor(
+  path: 'guidance' | 'recall',
+  caseId: string,
+  recordings: ReadonlyMap<string, string> = loadRecordings(),
+): RecordedAnswer | undefined {
+  const key = `${path}:${caseId}`;
+  const real = recordings.get(key);
+  if (real !== undefined) {
+    return { text: real, real: true };
+  }
+  const standIn = QUESTION_STAND_INS[key];
+  return standIn === undefined ? undefined : { text: standIn, real: false };
+}
+
 export const STAND_IN_KEYS: readonly string[] = Object.keys(STAND_INS);
+export const QUESTION_STAND_IN_KEYS: readonly string[] = Object.keys(QUESTION_STAND_INS);

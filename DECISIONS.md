@@ -1006,3 +1006,44 @@ named. The same four-branch decision had been copy-pasted into three commands,
 so the bug existed three times and would have needed fixing three times.
 `test/clickable.test.ts` asserts that only a hint may be inert, and that no
 input to `actionFor` other than Escape closes the window.
+
+## Decision: The centre of this product is the constraint, not the review
+
+Review, guidance and recall are peers. None of them is "the main feature", and
+`PROGRESS.md` no longer treats one as the thing to measure the product by.
+
+Reason:
+This was got wrong once, and the way it was got wrong is worth recording,
+because the reasoning that produced it is available to anybody reading `SPEC.md`
+in a hurry.
+
+§19 lists only review under Required, with progressive hints, documentation
+navigation and recall assistance under Optional, and §20's acceptance criteria
+are almost entirely about review. Read quickly, that says review is the point.
+But §19 opens with 「最初のバージョンでは以下のみ実装する」 — it is choosing the
+smallest first version, not ranking the product's parts. Every Optional item on
+that list is now implemented, so the distinction is historical.
+
+What SPEC actually centres:
+- §4.1 lists seven things Navigator does. Review is one, beside Documentation
+  navigation, Minimal hints and Recall assistance.
+- §7 makes silence the default and usually the correct answer. **A capability
+  whose correct output is normally nothing cannot be the product's yardstick.**
+- §23's North Star describes a day of the developer writing, thinking, reading
+  documentation and trying to remember an API — with review appearing only
+  「本当に見落としている問題があるときだけ」. Review is the rare one; §9 and §10
+  are what a person touches.
+
+So the centre is §16 (Navigator cannot write code) and §7 (silence by default).
+§22's question and §23's North Star describe a posture, not a feature. The three
+commands are three deliveries of one discipline.
+
+Consequence, and why this is not a wording quibble:
+The wrong premise produced a measurement hole. `test/eval/` was built to score
+review and nothing else, so the only instrument for `SPEC.md` §7 — the claim
+the whole product rests on — was blind to two thirds of the product until #37.
+A premise about what matters decides what gets built, and this one did.
+
+When to revisit:
+If real use shows people only ever run one of the three. That is evidence about
+the product, and it would belong here. Nothing in `SPEC.md` establishes it.
