@@ -128,7 +128,10 @@ Not started, and each is a deliberate hold rather than an oversight.
 - Distribution is a locally built `.vsix` (`npm run install:local`), not the
   Marketplace — see `DECISIONS.md`. `publisher` is therefore a deliberate
   placeholder and the extension id is `navigator.yuvava`. Do not "fix" it.
-- No `feedback/` directory exists yet. If real-world usage starts producing
-  observations, that is where they go (`LOOP.md` §2.1). Now that the extension
-  is being installed and used locally, this is the likeliest source of the
-  next loop's work — particularly for "review quality is unmeasured" above.
+- Feedback from real use arrives as GitHub Issues labelled `feedback`, not as
+  files (`LOOP.md` §2.2, and the reasoning in `DECISIONS.md`). Check open
+  issues during context recovery. Now that the extension is installed and in
+  use, this is the likeliest source of the next loop's work — particularly for
+  "review quality is unmeasured" above.
+- **This repository is public.** Never put user code that was under review into
+  an issue, a document or a comment. Record the pattern, not the code.
