@@ -768,3 +768,32 @@ script asks for that message by name.
 Verified as far as it can be: run against a local OpenAI-compatible stub
 server, review, guidance and recall all completed and the MDN check failed with
 its intended message.
+
+## Decision: The extension-host checks exist, and are not part of the gate
+
+`npm run test:host` starts a real VS Code through `@vscode/test-electron` and
+runs `scripts/host/index.cjs` inside it: the extension is installed under the
+id its secrets are keyed by, it activates (so `main` resolved), every
+contributed command is in the palette, VS Code accepts the diagnostics, and
+the hover provider is live and silent where nothing has been reviewed.
+
+Why it is not in `npm run verify`:
+It needs a display, or `xvfb-run`. The gate has to be runnable by an agent in
+a container, and a gate that quietly skipped part of itself would be exactly
+the problem decided against in `test/gitIntegration.test.ts` — so rather than a
+skipping test in the gate, this is a separate command that either runs properly
+or is not claimed to have run.
+
+Why CommonJS:
+VS Code `require`s `extensionTestsPath`, and the Node inside a VS Code release
+is not always new enough to `require` an ES module. `.cjs` removes a failure
+mode from the one command that cannot be tried here.
+
+What is still not covered, even by this:
+`SecretStorage` behaviour, because the checks run outside the extension's own
+`ExtensionContext` and cannot reach it. And nothing in the host checks calls
+out to a model — `npm run smoke` is that.
+
+Status: written, loadable, and never run. This environment cannot even
+download VS Code (`update.code.visualstudio.com` is outside its egress
+allowlist), which is issue #18 and is recorded in `PROGRESS.md`.
