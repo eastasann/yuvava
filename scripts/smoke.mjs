@@ -13,10 +13,17 @@
  *
  *   ANTHROPIC_API_KEY=... npm run smoke
  *   OPENAI_API_KEY=...    npm run smoke -- --provider=openai
- *   GROQ_KEY=...          OPENAI_API_KEY=$GROQ_KEY npm run smoke -- \
+ *   OPENAI_API_KEY=$GROQ_KEY npm run smoke -- \
  *                           --provider=openai \
  *                           --base-url=https://api.groq.com/openai/v1 \
- *                           --model=llama-3.3-70b-versatile
+ *                           --model=<one the endpoint actually has>
+ *
+ * Ask the endpoint for that name rather than copying one from here. A model
+ * written into a comment is retired eventually, and the first thing this
+ * script ever got back from a real server was a 404 for exactly that reason:
+ *
+ *   curl -s https://api.groq.com/openai/v1/models \
+ *     -H "Authorization: Bearer $KEY" | grep -o '\"id\":\"[^\"]*\"'
  *
  * The compatible path is the least trustworthy of the three, and the two
  * things most likely to be wrong are called out by name in the output when

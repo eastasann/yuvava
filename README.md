@@ -149,17 +149,28 @@ the OpenAI API — a free tier, or a model on your own machine:
 // Groq
 "navigator.provider": "openai",
 "navigator.openaiBaseUrl": "https://api.groq.com/openai/v1",
-"navigator.model": "llama-3.3-70b-versatile",
+"navigator.model": "<one from the list below>",
 
 // Ollama, locally — nothing leaves the machine
 "navigator.openaiBaseUrl": "http://localhost:11434/v1",
-"navigator.model": "qwen2.5-coder:14b",
+"navigator.model": "<one from `ollama list`>",
 ```
 
-Setting it switches the request to `/chat/completions`, which is what those
-services implement; OpenAI itself keeps using the Responses API. If the
-endpoint rejects the JSON schema, Navigator retries once without it and
-validates the answer locally — the fallback is noted in the log.
+**Ask the endpoint which models it has, rather than trusting a name written
+down somewhere.** Names are retired without notice, and a stale one fails as a
+404 that looks like a broken extension:
+
+```bash
+curl -s https://api.groq.com/openai/v1/models \
+  -H "Authorization: Bearer $KEY" | grep -o '"id":"[^"]*"'
+```
+
+Setting a base URL switches the request to `/chat/completions`, which is what
+those services implement; OpenAI itself keeps using the Responses API. Two
+things are retried once each, and both are noted in the log: a rejected JSON
+schema (Navigator asks again without it and validates the answer locally), and
+a refused request size (Navigator asks again with half the room set aside for
+the answer, which is what a small tokens-per-minute quota needs).
 
 > **Your diff is sent to whatever you point this at.** Free tiers commonly
 > train on the data they receive; check the provider's terms. Navigator is a
